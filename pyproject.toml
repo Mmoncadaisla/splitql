@@ -1,0 +1,22 @@
+[project]
+name = "splitql"
+version = "0.1.0"
+description = "Split a SQL query into per-partition fragments plus a reduce query. Pure planning, no runtime."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Miguel Moncada" }]
+dependencies = ["sqlglot>=30"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "duckdb>=1.0", "pyarrow>=17"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/splitql"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
