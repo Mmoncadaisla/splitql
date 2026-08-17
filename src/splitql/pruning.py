@@ -11,6 +11,7 @@ time); dropping one is only allowed on proof.
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 
 from sqlglot import exp
 
@@ -63,13 +64,13 @@ def _literal_value(node: exp.Expression):
             return node.name
         text = node.name
         try:
-            # exact int parse first: routing large integers through float
-            # would round them (2**53 + 1 -> 2**53) and could prune the
-            # matching file
+            # exact parses only: float would round both large integers
+            # (2**53 + 1 -> 2**53) and decimal boundaries (0.1), and either
+            # rounding can prune the matching file
             if "." not in text and "e" not in text.lower():
                 return int(text)
-            return float(text)
-        except ValueError:
+            return Decimal(text)
+        except (ValueError, InvalidOperation):
             return None
     if isinstance(node, exp.Neg):
         v = _literal_value(node.this)

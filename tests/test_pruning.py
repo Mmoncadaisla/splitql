@@ -81,6 +81,15 @@ def test_large_integer_literals_prune_exactly():
     assert kept == {"match.parquet"} and pruned == {"below.parquet"}
 
 
+def test_decimal_stats_prune_exactly():
+    from decimal import Decimal
+
+    match = DataFile("match.parquet", 10, stats={"x": ColumnStats(Decimal("0.1"), Decimal("0.1"))})
+    other = DataFile("other.parquet", 10, stats={"x": ColumnStats(Decimal("0.2"), Decimal("0.3"))})
+    kept, pruned = kept_paths("SELECT count(*) FROM t WHERE x = 0.1", [match, other])
+    assert kept == {"match.parquet"} and pruned == {"other.parquet"}
+
+
 def test_is_null_pruning():
     no_nulls = f("nonulls.parquet", 0, 10, null_count=0)
     with_nulls = f("nulls.parquet", 0, 10, null_count=3)
