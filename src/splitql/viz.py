@@ -97,7 +97,12 @@ def to_html(plan: Plan) -> str:
         f"{query_block}{warnings}"
         f'<div class=statsrow><span class=stat><b>{plan.workers}</b> fragments</span>'
         f"<span class=stat><b>{total_files}</b> files</span>"
-        f"<span class=stat><b>{_human_bytes(total_bytes) if total_bytes else '?'}</b> scanned</span>"
+        + (
+            f"<span class=stat><b>{len(plan.pruned_files)}</b> files pruned by stats</span>"
+            if plan.pruned_files
+            else ""
+        )
+        + f"<span class=stat><b>{_human_bytes(total_bytes) if total_bytes else '?'}</b> scanned</span>"
         f"<span class=stat>partials table <b><code>{html.escape(plan.partials_table)}</code></b></span></div>"
     )
     graph = f"""<div class=flow>

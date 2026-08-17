@@ -143,6 +143,46 @@ plan(sql, source=src, max_workers=16)
 Grouping balances by size (LPT greedy) when sizes are known, round-robin
 otherwise.
 
+## Zone-map pruning
+
+Files carrying per-column min/max stats are pruned against the WHERE clause
+before grouping — fewer fragments, fewer workers, less I/O:
+
+```python
+from splitql import plan, DataFile, ColumnStats
+
+files = [
+    DataFile("jan.parquet", 900_000_000,
+             stats={"d": ColumnStats(date(2026, 1, 1), date(2026, 1, 31))}),
+    DataFile("jun.parquet", 800_000_000,
+             stats={"d": ColumnStats(date(2026, 6, 1), date(2026, 6, 30))}),
+]
+p = plan("SELECT count(*) FROM t WHERE d > DATE '2026-05-01'", files=files)
+p.pruned_files   # ['jan.parquet']
+```
+
+Pruning is conservative in the safe direction: files without stats, columns
+without stats, and any predicate shape it cannot prove (NOT, expressions,
+non-literal comparisons) are kept — keeping a file is always correct, its
+rows just fail the filter at scan time. Supported proofs: `=`, `!=`, `<`,
+`<=`, `>`, `>=`, `BETWEEN`, `IN (literals)`, `IS NULL` (via `null_count`),
+with `AND`/`OR` composition, over numbers, strings and dates. If everything
+prunes, one fragment survives so global aggregates still return their
+zero-rows answer (`COUNT` = 0).
+
+Getting stats without leaving DuckDB — per-file min/max from Parquet footers:
+
+```sql
+SELECT file_name, path_in_schema AS column,
+       MIN(stats_min_value) AS min_value, MAX(stats_max_value) AS max_value
+FROM parquet_metadata(['s3://lake/sales/*.parquet'])
+GROUP BY 1, 2
+-- note: footer stats come back as strings; cast to the column type
+```
+
+For DuckLake, the catalog keeps the same information in its
+`ducklake_file_column_stats` table.
+
 ## Visualize the plan
 
 ```python
@@ -169,7 +209,9 @@ from single-node DuckDB, that's a bug, full stop.
 - `HAVING` (rewrites cleanly into the reduce)
 - `COUNT(DISTINCT ...)` via exact re-aggregation or HLL sketches
 - Iceberg / Delta partition sources (same metadata shape as DuckLake)
-- Partition pruning from catalog stats (today: prune before calling)
+- Non-file scan sources (e.g. Zarr chunk ranges via the `zarr` DuckDB
+  community extension — the partition unit becomes a chunk-grid slice
+  instead of a file list)
 - Dialect transpilation of fragments via sqlglot
 
 ## License

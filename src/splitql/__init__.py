@@ -7,12 +7,13 @@ ssh — anything that can run SQL and concatenate results).
 from .ir import Plan
 from .planner import plan
 from .sizing import group_files, recommend_workers
-from .sources import DataFile, DuckLakeSource, ParquetSource
+from .sources import ColumnStats, DataFile, DuckLakeSource, ParquetSource
 
 __all__ = [
     "plan",
     "Plan",
     "DataFile",
+    "ColumnStats",
     "ParquetSource",
     "DuckLakeSource",
     "recommend_workers",

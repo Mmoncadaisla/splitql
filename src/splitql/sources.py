@@ -13,9 +13,21 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class ColumnStats:
+    """Per-file min/max for one column (zone map). Values must be Python
+    comparables matching the column type (numbers, strings, date/datetime)."""
+
+    min_value: object = None
+    max_value: object = None
+    null_count: int | None = None
+
+
+@dataclass(frozen=True)
 class DataFile:
     path: str
     size_bytes: int | None = None
+    stats: dict[str, ColumnStats] | None = None
+    row_count: int | None = None
 
 
 class ParquetSource:

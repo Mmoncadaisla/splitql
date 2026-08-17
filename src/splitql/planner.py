@@ -10,7 +10,8 @@ from sqlglot.errors import ParseError
 
 from .eligibility import ineligibility_reason
 from .ir import Plan, ineligible
-from .rewrite import PARTIALS_PLACEHOLDER, split
+from .pruning import prune_files
+from .rewrite import split
 from .sizing import group_files, recommend_workers
 from .sources import DataFile, DuckLakeSource, ParquetSource
 
@@ -35,6 +36,10 @@ def plan(
     DuckLakeSource), ``files`` (shorthand for ParquetSource), or
     ``file_groups`` (pre-grouped, one fragment per group).
 
+    Files carrying ``stats`` (per-column min/max zone maps) are pruned
+    against the WHERE clause before grouping; files without stats are
+    always scanned.
+
     Worker count: explicit ``workers`` wins; otherwise it is recommended
     from file sizes when the source knows them (optionally bounded by
     ``worker_memory_bytes`` and ``max_workers``); otherwise one fragment
@@ -43,13 +48,6 @@ def plan(
     Returns an ineligible Plan (never raises) for anything about the QUERY
     that prevents splitting; raises ValueError only for API misuse.
     """
-    groups = _resolve_groups(source, files, file_groups, workers,
-                             worker_memory_bytes, max_workers)
-    if isinstance(groups, Plan):
-        groups.query = sql
-        return groups
-    groups, warnings = groups
-
     try:
         statement = sqlglot.parse_one(sql, read=dialect)
     except ParseError as e:
@@ -62,6 +60,20 @@ def plan(
     result = split(statement, dialect)
     if result.reason is not None:
         return ineligible(result.reason, query=sql)
+
+    resolved = _resolve_groups(
+        source,
+        files,
+        file_groups,
+        workers,
+        worker_memory_bytes,
+        max_workers,
+        statement.args.get("where"),
+    )
+    if isinstance(resolved, Plan):
+        resolved.query = sql
+        return resolved
+    groups, warnings, pruned = resolved
 
     table = statement.args["from_"].this
     alias = table.alias or table.name
@@ -83,6 +95,7 @@ def plan(
         warnings=warnings,
         query=sql,
         fragment_files=groups,
+        pruned_files=[f.path for f in pruned],
     )
 
 
@@ -93,36 +106,63 @@ def _resolve_groups(
     workers: int | None,
     worker_memory_bytes: int | None,
     max_workers: int | None,
-) -> tuple[list[list[DataFile]], list[str]] | Plan:
+    where: exp.Where | None,
+) -> tuple[list[list[DataFile]], list[str], list[DataFile]] | Plan:
     given = [x is not None for x in (source, files, file_groups)]
     if sum(given) != 1:
         raise ValueError("pass exactly one of source=, files=, or file_groups=")
 
     if file_groups is not None:
-        groups = [
+        raw_groups = [
             [f if isinstance(f, DataFile) else DataFile(path=str(f)) for f in g]
             for g in file_groups
             if g
         ]
-        if not groups:
+        if not raw_groups:
             return ineligible("source has no files")
-        return groups, []
+        groups, pruned = [], []
+        for g in raw_groups:
+            kept_g, pruned_g = prune_files(g, where)
+            pruned.extend(pruned_g)
+            if kept_g:
+                groups.append(kept_g)
+        groups, pruned = _never_empty(groups, pruned)
+        return groups, [], pruned
 
     src = source if source is not None else ParquetSource(files)
     blocked = src.blocking_reason()
     if blocked is not None:
         return ineligible(blocked)
 
+    kept, pruned = prune_files(src.files, where)
+    groups_of_one = [[f] for f in kept]
+    groups_of_one, pruned = _never_empty(groups_of_one, pruned)
+    kept = [f for g in groups_of_one for f in g]
+
     if workers is None:
-        if all(f.size_bytes is not None for f in src.files):
+        if all(f.size_bytes is not None for f in kept):
             workers = recommend_workers(
-                src.files,
+                kept,
                 worker_memory_bytes=worker_memory_bytes,
                 max_workers=max_workers,
             )
         else:
-            workers = len(src.files) if max_workers is None else max_workers
-    return group_files(src.files, workers), src.warnings()
+            workers = len(kept) if max_workers is None else max_workers
+    return group_files(kept, workers), src.warnings(), pruned
+
+
+def _never_empty(
+    groups: list[list[DataFile]], pruned: list[DataFile]
+) -> tuple[list[list[DataFile]], list[DataFile]]:
+    """Pruning everything must still leave one fragment: global aggregates
+    need a row source to produce their zero-rows answer (COUNT() = 0), and
+    scanning a non-matching file is always correct — its rows just fail
+    the WHERE."""
+    if groups:
+        return groups, pruned
+    sized = [f for f in pruned if f.size_bytes is not None]
+    keep = min(sized, key=lambda f: f.size_bytes) if sized else pruned[0]
+    return [[keep]], [f for f in pruned if f is not keep]
 
 
 def _scan_node(group: list[DataFile], alias: str, dialect: str) -> exp.Expression:
