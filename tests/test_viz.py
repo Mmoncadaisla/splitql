@@ -19,6 +19,18 @@ def test_html_escapes_sql():
     assert "&lt;" in p.to_html()
 
 
+def test_copy_attribute_survives_double_quotes():
+    # reduce SQL always contains quoted aliases; a raw " inside data-sql
+    # would truncate the attribute and break the copy button
+    import re
+
+    p = plan(SQL, files=FILES, workers=1)
+    h = p.to_html()
+    assert '"region"' in (p.reduce or "")
+    attrs = re.findall(r'data-sql="([^"]*)"', h)
+    assert any("&quot;region&quot;" in a for a in attrs)
+
+
 def test_html_ineligible():
     p = plan("SELECT 1", files=FILES)
     assert "Not splittable" in p.to_html()
