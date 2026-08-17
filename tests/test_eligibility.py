@@ -32,6 +32,12 @@ REJECTED = [
     ("SELECT region, sum(x), y FROM sales GROUP BY region", "GROUP BY"),
     ("SELECT sum(x) FROM sales ORDER BY region", "not in the SELECT output"),
     ("this is not sql at all (", "parse error"),
+    ("SELECT DISTINCT ON (region) region, x FROM sales ORDER BY region, x", "DISTINCT ON"),
+    ("SELECT id FROM sales LIMIT 10%", "percentage"),
+    ("SELECT id FROM sales ORDER BY x LIMIT 10 WITH TIES", "WITH TIES"),
+    ("SELECT count(*) FROM sales USING SAMPLE 10 ROWS", "SAMPLE"),
+    ("SELECT region FROM sales GROUP BY region COLLATE NOCASE", "COLLATE"),
+    ("SELECT renamed FROM sales AS s(renamed)", "column lists"),
 ]
 
 

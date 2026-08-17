@@ -92,8 +92,10 @@ above, ORDER BY output columns/positions, LIMIT.
 
 Deliberately rejected in v0.1 (returned as `reason`, never guessed at):
 joins, subqueries, CTEs, window functions, HAVING, QUALIFY, OFFSET,
-`COUNT(DISTINCT ...)`, `FILTER (WHERE ...)`, positional GROUP BY, and any
-aggregate outside the whitelist. A conservative `False` is always available
+`COUNT(DISTINCT ...)`, `FILTER (WHERE ...)`, `DISTINCT ON`, percentage and
+`WITH TIES` limits, `USING SAMPLE`, `COLLATE`, table aliases with column
+lists, volatile functions, positional GROUP BY, and any aggregate outside
+the whitelist. A conservative `False` is always available
 as the single-node fallback, so splitql can never make your results wrong —
 only your fast path narrower.
 
@@ -128,7 +130,11 @@ The source enforces DuckLake's correctness caveats instead of hoping:
 - **inlined data** (on by default in DuckLake!) is invisible to the file
   list → the gate is fail-closed: splitting requires an explicit
   `has_inlined_data=False` assertion (check via `DATA_INLINING_ROW_LIMIT 0`
-  or after flushing inlined data); `True` and `None` (unknown) both refuse.
+  or after flushing inlined data); `True` and `None` (unknown) both refuse;
+- **schema evolution**: DuckLake fragment scans use `union_by_name = TRUE`,
+  which covers added columns across file generations. Renamed or dropped
+  columns need the catalog's column mapping, which raw parquet scans cannot
+  apply — known caveat, rewrite such tables before splitting.
 
 ## Worker count
 
