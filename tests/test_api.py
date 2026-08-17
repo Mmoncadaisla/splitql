@@ -120,3 +120,9 @@ def test_workers_recommended_when_sizes_known():
     src = ParquetSource([DataFile(f"f{i}.parquet", 512 * 1024 * 1024) for i in range(6)])
     p = plan(SQL, source=src, max_workers=3)
     assert p.eligible and p.workers == 3
+
+
+def test_target_fragment_bytes_drives_fanout():
+    files = [DataFile(f"f{i}.parquet", 1024 * 1024) for i in range(6)]  # 6 MB total
+    assert plan(SQL, files=files).workers == 1  # default 512MB target: one is enough
+    assert plan(SQL, files=files, target_fragment_bytes=2 * 1024 * 1024).workers == 3

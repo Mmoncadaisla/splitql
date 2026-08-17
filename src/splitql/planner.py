@@ -26,6 +26,7 @@ def plan(
     file_groups: Sequence[Sequence[str | DataFile]] | None = None,
     workers: int | None = None,
     worker_memory_bytes: int | None = None,
+    target_fragment_bytes: int | None = None,
     max_workers: int | None = None,
     partials_table: str = "partials",
     dialect: str = "duckdb",
@@ -71,6 +72,7 @@ def plan(
         file_groups,
         workers,
         worker_memory_bytes,
+        target_fragment_bytes,
         max_workers,
         statement.args.get("where"),
     )
@@ -115,6 +117,7 @@ def _resolve_groups(
     file_groups: Sequence[Sequence[str | DataFile]] | None,
     workers: int | None,
     worker_memory_bytes: int | None,
+    target_fragment_bytes: int | None,
     max_workers: int | None,
     where: exp.Where | None,
 ) -> tuple[list[list[DataFile]], list[str], list[DataFile]] | Plan:
@@ -148,6 +151,7 @@ def _resolve_groups(
             workers = recommend_workers(
                 kept,
                 worker_memory_bytes=worker_memory_bytes,
+                target_fragment_bytes=target_fragment_bytes,
                 max_workers=max_workers,
             )
         else:
