@@ -57,6 +57,29 @@ def test_nonpositive_sizing_params_raise():
             plan(SQL, files=["a.parquet"], **kwargs)
 
 
+def test_ducklake_schema_evolution_semantics():
+    rows = [{"data_file": "f1.parquet", "data_file_size_bytes": 100, "delete_file": None}]
+    unknown = plan(
+        SQL, source=DuckLakeSource.from_list_files(rows, has_inlined_data=False)
+    )
+    assert unknown.eligible
+    assert any("schema evolution" in w for w in unknown.warnings)
+    checked = plan(
+        SQL,
+        source=DuckLakeSource.from_list_files(
+            rows, has_inlined_data=False, has_schema_evolution=False
+        ),
+    )
+    assert checked.eligible and not checked.warnings
+    evolved = plan(
+        SQL,
+        source=DuckLakeSource.from_list_files(
+            rows, has_inlined_data=False, has_schema_evolution=True
+        ),
+    )
+    assert not evolved.eligible and "schema evolution" in evolved.reason
+
+
 def test_ducklake_scans_union_by_name(tmp_path):
     import duckdb
 
@@ -121,7 +144,10 @@ def test_ducklake_inlined_data_is_fail_closed():
     unknown = plan(SQL, source=DuckLakeSource.from_list_files(rows))
     assert not unknown.eligible and "unknown" in unknown.reason
     checked = plan(
-        SQL, source=DuckLakeSource.from_list_files(rows, has_inlined_data=False)
+        SQL,
+        source=DuckLakeSource.from_list_files(
+            rows, has_inlined_data=False, has_schema_evolution=False
+        ),
     )
     assert checked.eligible and not checked.warnings
     inlined = plan(

@@ -132,9 +132,12 @@ The source enforces DuckLake's correctness caveats instead of hoping:
   `has_inlined_data=False` assertion (check via `DATA_INLINING_ROW_LIMIT 0`
   or after flushing inlined data); `True` and `None` (unknown) both refuse;
 - **schema evolution**: DuckLake fragment scans use `union_by_name = TRUE`,
-  which covers added columns across file generations. Renamed or dropped
-  columns need the catalog's column mapping, which raw parquet scans cannot
-  apply — known caveat, rewrite such tables before splitting.
+  but that unifies only within each fragment's file group — a worker whose
+  group holds only old-generation files still cannot bind a newer column,
+  and renames/drops need the catalog's column mapping that raw parquet
+  scans cannot apply. Unlike inlined data this fails loudly (binder or
+  concatenation error), so `has_schema_evolution=None` (unknown) plans
+  with a warning, `True` refuses, `False` means you checked.
 
 ## Worker count
 
@@ -182,11 +185,14 @@ zero-rows answer (`COUNT` = 0).
 Getting stats without leaving DuckDB — per-file min/max from Parquet footers:
 
 ```sql
+-- footer stats are VARCHAR: cast INSIDE the aggregates (to the column's
+-- real type), or MIN/MAX order row groups lexicographically ('10' < '2')
+-- and the wrong bounds make pruning silently drop matching files
 SELECT file_name, path_in_schema AS column,
-       MIN(stats_min_value) AS min_value, MAX(stats_max_value) AS max_value
+       MIN(CAST(stats_min_value AS DOUBLE)) AS min_value,
+       MAX(CAST(stats_max_value AS DOUBLE)) AS max_value
 FROM parquet_metadata(['s3://lake/sales/*.parquet'])
 GROUP BY 1, 2
--- note: footer stats come back as strings; cast to the column type
 ```
 
 For DuckLake, the catalog keeps the same information in its
