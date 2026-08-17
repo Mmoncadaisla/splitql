@@ -60,10 +60,10 @@ def test_ducklake_delete_files_block_split():
     assert not p.eligible and "delete" in p.reason
 
 
-def test_ducklake_inlined_data_semantics():
+def test_ducklake_inlined_data_is_fail_closed():
     rows = [{"data_file": "f1.parquet", "data_file_size_bytes": 100, "delete_file": None}]
     unknown = plan(SQL, source=DuckLakeSource.from_list_files(rows))
-    assert unknown.eligible and unknown.warnings
+    assert not unknown.eligible and "unknown" in unknown.reason
     checked = plan(
         SQL, source=DuckLakeSource.from_list_files(rows, has_inlined_data=False)
     )

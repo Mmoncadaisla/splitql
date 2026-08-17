@@ -125,9 +125,9 @@ The source enforces DuckLake's correctness caveats instead of hoping:
 - **delete files present** → not eligible (a raw parquet scan would
   resurrect deleted rows);
 - **inlined data** (on by default in DuckLake!) is invisible to the file
-  list → `has_inlined_data=True` refuses the split, `None` (unknown) plans
-  with a warning, `False` means you checked (e.g. `DATA_INLINING_ROW_LIMIT 0`
-  or after flushing inlined data).
+  list → the gate is fail-closed: splitting requires an explicit
+  `has_inlined_data=False` assertion (check via `DATA_INLINING_ROW_LIMIT 0`
+  or after flushing inlined data); `True` and `None` (unknown) both refuse.
 
 ## Worker count
 

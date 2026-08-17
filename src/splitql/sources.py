@@ -47,10 +47,11 @@ class DuckLakeSource:
     a raw ``read_parquet`` scan would resurrect deleted rows. Data
     inlining (small writes stored as catalog rows, on by default in
     DuckLake) is invisible to the file list: rows still inlined would be
-    silently missed. Pass ``has_inlined_data=False`` once you have checked
-    (e.g. ``DATA_INLINING_ROW_LIMIT 0`` on the writer, or after
-    ``ducklake_flush_inlined_data``); ``True`` refuses the split; ``None``
-    (unknown) allows it with a warning.
+    silently missed, so the gate is fail-closed — splitting requires an
+    explicit ``has_inlined_data=False`` assertion (check via
+    ``DATA_INLINING_ROW_LIMIT 0`` on the writer, or after
+    ``ducklake_flush_inlined_data``). ``True`` and ``None`` (unknown)
+    both refuse the split.
     """
 
     def __init__(
@@ -104,12 +105,14 @@ class DuckLakeSource:
                 "table has inlined data in the catalog; a raw parquet scan "
                 "would miss those rows"
             )
+        if self.has_inlined_data is None:
+            return (
+                "inlined data status unknown; rows still inlined in the "
+                "DuckLake catalog would be silently missed — pass "
+                "has_inlined_data=False after checking (DATA_INLINING_ROW_LIMIT 0 "
+                "or ducklake_flush_inlined_data)"
+            )
         return None
 
     def warnings(self) -> list[str]:
-        if self.has_inlined_data is None:
-            return [
-                "inlined data not checked: rows still inlined in the DuckLake "
-                "catalog would be missed by the fragments"
-            ]
         return []
