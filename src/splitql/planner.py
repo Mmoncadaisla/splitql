@@ -121,10 +121,13 @@ def _resolve_groups(
     if file_groups is not None:
         # Verbatim contract: the caller owns grouping AND pruning here —
         # one fragment per given group, no reordering, no stats pruning.
+        # An empty group cannot become a fragment, so it is API misuse,
+        # not something to drop silently.
+        if any(not g for g in file_groups):
+            raise ValueError("file_groups must not contain empty groups")
         groups = [
             [f if isinstance(f, DataFile) else DataFile(path=str(f)) for f in g]
             for g in file_groups
-            if g
         ]
         if not groups:
             return ineligible("source has no files")

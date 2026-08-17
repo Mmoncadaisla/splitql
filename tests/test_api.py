@@ -37,6 +37,11 @@ def test_empty_source_is_ineligible():
     assert not plan(SQL, files=[]).eligible
 
 
+def test_empty_group_is_api_misuse():
+    with pytest.raises(ValueError):
+        plan(SQL, file_groups=[["a.parquet"], []])
+
+
 def test_path_escaping():
     p = plan(SQL, files=["we'ird.parquet"], workers=1)
     assert p.eligible
