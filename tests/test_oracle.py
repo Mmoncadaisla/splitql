@@ -45,6 +45,12 @@ UNORDERED = [
     "SELECT region, y, sum(x) AS s FROM sales GROUP BY region, y",
     "SELECT region, y % 2 AS parity, avg(x) AS m FROM sales GROUP BY region, y % 2",
     "SELECT strftime(d, '%Y-%m') AS month, count(*) AS n FROM sales GROUP BY month",
+    # GROUP BY without aggregates — global dedup of groups
+    "SELECT region FROM sales GROUP BY region",
+    "SELECT y % 2 AS parity FROM sales GROUP BY y % 2",
+    "SELECT region, y FROM sales GROUP BY region, y",
+    # DISTINCT over aggregated output — dedup of equal aggregates
+    "SELECT DISTINCT count(*) AS n FROM sales GROUP BY region",
     # plain scans and distinct
     "SELECT region FROM sales WHERE x > 140",
     "SELECT DISTINCT region, y FROM sales WHERE y > 10",

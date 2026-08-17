@@ -36,7 +36,10 @@ class SplitResult:
 def split(select: exp.Select, dialect: str) -> SplitResult:
     select = select.copy()
     _resolve_group_aliases(select)
-    if select.find(exp.AggFunc) is None:
+    # GROUP BY without aggregates still needs GLOBAL deduplication of groups,
+    # so it takes the aggregation path (concatenating per-fragment groups
+    # would emit duplicates).
+    if select.find(exp.AggFunc) is None and not select.args.get("group"):
         return _split_scan(select)
     return _split_aggregation(select, dialect)
 
@@ -135,6 +138,7 @@ def _split_aggregation(select: exp.Select, dialect: str) -> SplitResult:
     fragment = select.copy()
     fragment.set("order", None)
     fragment.set("limit", None)
+    fragment.set("distinct", None)
     frag_selects = [
         exp.alias_(g.copy(), group_alias[g.sql(dialect=dialect)]) for g in group_exprs
     ] + aggs.partial_cols
@@ -187,6 +191,8 @@ def _split_aggregation(select: exp.Select, dialect: str) -> SplitResult:
     reduce_ = (
         exp.Select().select(*reduce_outputs).from_(exp.to_table(PARTIALS_PLACEHOLDER))
     )
+    if select.args.get("distinct"):
+        reduce_.set("distinct", exp.Distinct())
     if group_exprs:
         reduce_.set(
             "group",
