@@ -149,6 +149,8 @@ Files carrying per-column min/max stats are pruned against the WHERE clause
 before grouping — fewer fragments, fewer workers, less I/O:
 
 ```python
+from datetime import date
+
 from splitql import plan, DataFile, ColumnStats
 
 files = [
@@ -195,6 +197,27 @@ lists, byte shares and expandable SQL, flowing scan → partials → reduce →
 result — with no external assets (works offline, light/dark aware).
 
 `p.to_json()` gives the whole plan as a JSON envelope for non-Python callers.
+
+## What "identical to single-node" means, precisely
+
+Two caveats apply to the equivalence contract — both inherent to parallel
+execution and both present in single-node DuckDB itself:
+
+- **Floating-point aggregation order.** `SUM`/`AVG` over inexact types
+  (DOUBLE/FLOAT) are evaluated in a different association order across
+  fragments, so results can differ in the last bits. Single-node DuckDB has
+  the same property between runs: its multi-threaded aggregation already
+  makes FP summation order nondeterministic. Exact types (integers,
+  DECIMAL) are exactly equal.
+- **Queries that are nondeterministic anyway.** `LIMIT` without `ORDER BY`
+  returns an arbitrary row subset, and ties in `ORDER BY ... LIMIT k` break
+  arbitrarily — in any engine. The split returns one of the valid answers,
+  not necessarily the same one as a given single-node run (planning emits a
+  warning for the unordered-LIMIT case). Add a tiebreaker column for full
+  determinism.
+
+Queries with deterministic semantics and exact types produce identical
+results — that is the tested contract.
 
 ## Correctness story
 

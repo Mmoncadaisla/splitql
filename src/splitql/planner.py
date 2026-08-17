@@ -75,6 +75,12 @@ def plan(
         return resolved
     groups, warnings, pruned = resolved
 
+    if statement.args.get("limit") and not statement.args.get("order"):
+        warnings = warnings + [
+            "LIMIT without ORDER BY selects arbitrary rows; the split may "
+            "return a different (equally valid) subset than a single-node run"
+        ]
+
     table = statement.args["from_"].this
     alias = table.alias or table.name
 

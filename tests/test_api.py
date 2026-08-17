@@ -43,6 +43,15 @@ def test_partials_table_is_configurable():
     assert "scratch.pieces" in p.reduce
 
 
+def test_unordered_limit_warns():
+    p = plan("SELECT id FROM sales LIMIT 5", files=["a.parquet"], workers=1)
+    assert p.eligible and any("LIMIT without ORDER BY" in w for w in p.warnings)
+    ordered = plan(
+        "SELECT id FROM sales ORDER BY id LIMIT 5", files=["a.parquet"], workers=1
+    )
+    assert ordered.eligible and not ordered.warnings
+
+
 def test_json_roundtrip():
     p = plan(SQL, files=["a.parquet"], workers=1)
     data = json.loads(p.to_json())
