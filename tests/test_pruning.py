@@ -53,6 +53,14 @@ def test_zone_map_pruning(predicate, expect_kept):
         assert len(kept) == 1  # never-empty rule
 
 
+def test_file_groups_are_verbatim_never_pruned():
+    p = plan(
+        "SELECT count(*) FROM t WHERE x > 999",
+        file_groups=[[LOW], [HIGH]],
+    )
+    assert p.eligible and p.workers == 2 and not p.pruned_files
+
+
 def test_files_without_stats_are_always_kept():
     kept, pruned = kept_paths("SELECT count(*) FROM t WHERE x > 999", [LOW, NO_STATS])
     assert "nostats.parquet" in kept and pruned == {"low.parquet"}
@@ -61,6 +69,16 @@ def test_files_without_stats_are_always_kept():
 def test_no_where_no_pruning():
     kept, pruned = kept_paths("SELECT count(*) FROM t", [LOW, HIGH])
     assert kept == {"low.parquet", "high.parquet"} and not pruned
+
+
+def test_large_integer_literals_prune_exactly():
+    # 2**53 + 1 is not representable as a float; rounding it during parsing
+    # would prune the MATCHING file
+    v = 2**53 + 1
+    match = f("match.parquet", v, v)
+    below = f("below.parquet", 2**53 - 10, 2**53 - 1)
+    kept, pruned = kept_paths(f"SELECT count(*) FROM t WHERE x = {v}", [match, below])
+    assert kept == {"match.parquet"} and pruned == {"below.parquet"}
 
 
 def test_is_null_pruning():

@@ -26,6 +26,11 @@ def test_exactly_one_partition_input():
         plan(SQL, files=["a.parquet"], file_groups=[["a.parquet"]])
     with pytest.raises(ValueError):
         plan(SQL)
+    # API misuse must not be masked by an ineligible or unparseable query
+    with pytest.raises(ValueError):
+        plan("this is not sql (", files=["a.parquet"], file_groups=[["a.parquet"]])
+    with pytest.raises(ValueError):
+        plan("SELECT 1")
 
 
 def test_empty_source_is_ineligible():

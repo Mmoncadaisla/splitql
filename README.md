@@ -106,7 +106,8 @@ from splitql import plan, ParquetSource, DataFile
 
 plan(sql, files=["a.parquet", "b.parquet"])                  # shorthand
 plan(sql, source=ParquetSource([DataFile("a.parquet", size_bytes=512_000_000)]))
-plan(sql, file_groups=[["a.parquet"], ["b.parquet"]])        # pre-grouped, verbatim
+plan(sql, file_groups=[["a.parquet"], ["b.parquet"]])        # pre-grouped, verbatim:
+                                                             # no pruning, no rebalancing
 ```
 
 ### DuckLake

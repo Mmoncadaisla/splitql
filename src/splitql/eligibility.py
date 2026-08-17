@@ -20,8 +20,20 @@ VOLATILE_NODES = (
     exp.CurrentTimestamp,
     exp.CurrentDate,
     exp.CurrentTime,
+    exp.Localtime,
+    exp.Localtimestamp,
 )
-VOLATILE_NAMES = {"now", "get_current_timestamp", "random", "uuid", "today"}
+VOLATILE_NAMES = {
+    "now",
+    "get_current_timestamp",
+    "get_current_time",
+    "random",
+    "uuid",
+    "today",
+    "current_localtime",
+    "current_localtimestamp",
+    "transaction_timestamp",
+}
 
 
 def ineligibility_reason(select: exp.Expression) -> str | None:

@@ -61,9 +61,14 @@ def _literal_value(node: exp.Expression):
     if isinstance(node, exp.Literal):
         if node.is_string:
             return node.name
+        text = node.name
         try:
-            n = float(node.name)
-            return int(n) if n.is_integer() and "." not in node.name else n
+            # exact int parse first: routing large integers through float
+            # would round them (2**53 + 1 -> 2**53) and could prune the
+            # matching file
+            if "." not in text and "e" not in text.lower():
+                return int(text)
+            return float(text)
         except ValueError:
             return None
     if isinstance(node, exp.Neg):

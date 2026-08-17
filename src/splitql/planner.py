@@ -48,6 +48,10 @@ def plan(
     Returns an ineligible Plan (never raises) for anything about the QUERY
     that prevents splitting; raises ValueError only for API misuse.
     """
+    # API misuse must surface even when the query itself is ineligible
+    if sum(x is not None for x in (source, files, file_groups)) != 1:
+        raise ValueError("pass exactly one of source=, files=, or file_groups=")
+
     try:
         statement = sqlglot.parse_one(sql, read=dialect)
     except ParseError as e:
@@ -114,26 +118,17 @@ def _resolve_groups(
     max_workers: int | None,
     where: exp.Where | None,
 ) -> tuple[list[list[DataFile]], list[str], list[DataFile]] | Plan:
-    given = [x is not None for x in (source, files, file_groups)]
-    if sum(given) != 1:
-        raise ValueError("pass exactly one of source=, files=, or file_groups=")
-
     if file_groups is not None:
-        raw_groups = [
+        # Verbatim contract: the caller owns grouping AND pruning here —
+        # one fragment per given group, no reordering, no stats pruning.
+        groups = [
             [f if isinstance(f, DataFile) else DataFile(path=str(f)) for f in g]
             for g in file_groups
             if g
         ]
-        if not raw_groups:
+        if not groups:
             return ineligible("source has no files")
-        groups, pruned = [], []
-        for g in raw_groups:
-            kept_g, pruned_g = prune_files(g, where)
-            pruned.extend(pruned_g)
-            if kept_g:
-                groups.append(kept_g)
-        groups, pruned = _never_empty(groups, pruned)
-        return groups, [], pruned
+        return groups, [], []
 
     src = source if source is not None else ParquetSource(files)
     blocked = src.blocking_reason()
