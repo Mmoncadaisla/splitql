@@ -45,16 +45,29 @@ def split(select: exp.Select, dialect: str) -> SplitResult:
 
 
 def _resolve_group_aliases(select: exp.Select) -> None:
-    """GROUP BY m, where m aliases a SELECT expression -> group by the expression."""
+    """GROUP BY m, where m aliases a SELECT expression -> group by the
+    expression. Unquoted identifiers match case-insensitively, per DuckDB
+    (GROUP BY bucket resolves an alias written AS Bucket)."""
     group = select.args.get("group")
     if group is None:
         return
-    alias_map = {
-        e.alias: e.this for e in select.expressions if isinstance(e, exp.Alias)
-    }
+    exact: dict[str, exp.Expression] = {}
+    folded: dict[str, exp.Expression] = {}
+    for e in select.expressions:
+        if not isinstance(e, exp.Alias):
+            continue
+        ident = e.args.get("alias")
+        exact[e.alias] = e.this
+        if isinstance(ident, exp.Identifier) and not ident.quoted:
+            folded[e.alias.lower()] = e.this
     for g in list(group.expressions):
-        if isinstance(g, exp.Column) and not g.table and g.name in alias_map:
-            g.replace(alias_map[g.name].copy())
+        if not (isinstance(g, exp.Column) and not g.table):
+            continue
+        target = exact.get(g.name)
+        if target is None and isinstance(g.this, exp.Identifier) and not g.this.quoted:
+            target = folded.get(g.name.lower())
+        if target is not None:
+            g.replace(target.copy())
 
 
 def _split_scan(select: exp.Select) -> SplitResult:

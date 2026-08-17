@@ -18,6 +18,7 @@ UNORDERED = [
     "SELECT region, avg(x) AS m FROM sales WHERE y > 5 GROUP BY region",
     "SELECT y % 3 AS bucket, sum(x) AS s FROM sales GROUP BY y % 3",
     "SELECT upper(region) AS r, count(*) AS n FROM sales GROUP BY r",
+    "SELECT y % 2 AS Bucket, count(*) AS n FROM sales GROUP BY bucket",
     "SELECT id, x FROM sales WHERE x > 100",
     "SELECT DISTINCT region FROM sales",
     "SELECT count(*) AS n, sum(x) AS s, avg(x) AS a FROM sales WHERE x > 1e9",
