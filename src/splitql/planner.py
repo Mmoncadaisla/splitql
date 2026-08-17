@@ -46,21 +46,22 @@ def plan(
     groups = _resolve_groups(source, files, file_groups, workers,
                              worker_memory_bytes, max_workers)
     if isinstance(groups, Plan):
+        groups.query = sql
         return groups
     groups, warnings = groups
 
     try:
         statement = sqlglot.parse_one(sql, read=dialect)
     except ParseError as e:
-        return ineligible(f"parse error: {e}")
+        return ineligible(f"parse error: {e}", query=sql)
 
     reason = ineligibility_reason(statement)
     if reason is not None:
-        return ineligible(reason)
+        return ineligible(reason, query=sql)
 
     result = split(statement, dialect)
     if result.reason is not None:
-        return ineligible(result.reason)
+        return ineligible(result.reason, query=sql)
 
     table = statement.args["from_"].this
     alias = table.alias or table.name

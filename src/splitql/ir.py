@@ -63,5 +63,7 @@ class Plan:
         return to_html(self)
 
 
-def ineligible(reason: str) -> Plan:
-    return Plan(eligible=False, reason=reason)
+def ineligible(reason: str, query: str | None = None) -> Plan:
+    """Ineligible plans keep the original query so the JSON envelope alone
+    is enough for a non-Python caller to run the single-node fallback."""
+    return Plan(eligible=False, reason=reason, query=query)
