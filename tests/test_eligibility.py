@@ -20,6 +20,10 @@ REJECTED = [
     ("SELECT id FROM sales ORDER BY id + 1", "ORDER BY"),
     ("SELECT median(x) FROM sales", "aggregate"),
     ("SELECT sum(x) FILTER (WHERE y > 5) FROM sales", "FILTER"),
+    ("SELECT count(*) FROM sales WHERE random() < 0.5", "volatile"),
+    ("SELECT now() AS t, count(*) FROM sales", "volatile"),
+    ("SELECT id FROM sales WHERE d < current_date", "volatile"),
+    ("SELECT uuid() AS u, id FROM sales", "volatile"),
     ("SELECT 1", "FROM"),
     ("SELECT id FROM sales UNION SELECT id FROM sales", "SELECT"),
     ("SELECT region, sum(x), y FROM sales GROUP BY region", "GROUP BY"),
@@ -34,3 +38,4 @@ def test_rejected(sql, reason_fragment):
     assert not p.eligible
     assert p.reduce is None and p.fragments == []
     assert reason_fragment.lower() in (p.reason or "").lower(), p.reason
+    assert p.query == sql  # the JSON envelope alone must allow the fallback

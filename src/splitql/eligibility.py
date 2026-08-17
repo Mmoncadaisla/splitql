@@ -12,6 +12,17 @@ from sqlglot import exp
 
 SUPPORTED_AGGS = (exp.Sum, exp.Count, exp.Min, exp.Max, exp.Avg)
 
+# Nondeterministic (or evaluation-time-dependent) functions: each fragment
+# would observe its own value, diverging from any single evaluation.
+VOLATILE_NODES = (
+    exp.Rand,
+    exp.Uuid,
+    exp.CurrentTimestamp,
+    exp.CurrentDate,
+    exp.CurrentTime,
+)
+VOLATILE_NAMES = {"now", "get_current_timestamp", "random", "uuid", "today"}
+
 
 def ineligibility_reason(select: exp.Expression) -> str | None:
     """Return why this statement cannot be split, or None if it can."""
@@ -45,6 +56,13 @@ def ineligibility_reason(select: exp.Expression) -> str | None:
 
     if select.find(exp.Filter):
         return "FILTER clauses on aggregates are not supported"
+
+    for node in select.find_all(exp.Func):
+        if isinstance(node, VOLATILE_NODES) or (
+            isinstance(node, exp.Anonymous) and node.name.lower() in VOLATILE_NAMES
+        ):
+            name = node.name if isinstance(node, exp.Anonymous) else node.sql_name()
+            return f"volatile function {name} is not supported"
 
     aggs = list(select.find_all(exp.AggFunc))
     for agg in aggs:
