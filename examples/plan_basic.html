@@ -1,0 +1,92 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>splitql plan</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root { --bg:#f7f7f5; --card:#ffffff; --ink:#1a1a18; --dim:#6b6b66; --line:#d9d9d4;
+        --accent:#0b6e4f; --accent-soft:#e3f0ea; --warn-bg:#fdf3d7; --warn-ink:#7a5b00; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#161614; --card:#20201d; --ink:#e8e8e3; --dim:#98988f; --line:#3a3a35;
+          --accent:#4dbd94; --accent-soft:#1d3229; --warn-bg:#332a10; --warn-ink:#e3c56b; } }
+* { box-sizing:border-box; }
+body { margin:0; padding:24px; background:var(--bg); color:var(--ink);
+       font:14px/1.5 -apple-system, "Segoe UI", sans-serif; }
+h1 { font-size:18px; margin:0 0 4px; } h3 { font-size:12px; text-transform:uppercase;
+     letter-spacing:.06em; color:var(--dim); margin:0 0 8px; }
+.dim { color:var(--dim); font-size:12px; }
+.statsrow { display:flex; gap:16px; flex-wrap:wrap; margin:12px 0 20px; }
+.stat { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:6px 12px; }
+.flow { display:flex; align-items:flex-start; gap:8px; overflow-x:auto; padding-bottom:12px; }
+.stage { min-width:230px; max-width:380px; flex:1; }
+.arrow { align-self:center; color:var(--dim); font-size:20px; padding:0 2px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:10px;
+        padding:10px 12px; margin-bottom:10px; }
+.card.fragment:hover, .card.reduce:hover { border-color:var(--accent); }
+.cardhead { display:flex; flex-direction:column; gap:2px; margin-bottom:6px; }
+.badge { display:inline-block; background:var(--accent-soft); color:var(--accent);
+         border-radius:6px; padding:1px 8px; font-size:12px; font-weight:600; width:fit-content; }
+.bar { height:4px; background:var(--line); border-radius:2px; margin:4px 0 8px; }
+.fill { height:100%; background:var(--accent); border-radius:2px; }
+pre { background:var(--bg); border:1px solid var(--line); border-radius:6px;
+      padding:8px; overflow-x:auto; font-size:12px; white-space:pre-wrap; }
+details summary { cursor:pointer; color:var(--dim); font-size:12px; }
+ul.files { margin:6px 0; padding-left:18px; font-size:12px; }
+button.copy { font-size:11px; border:1px solid var(--line); background:var(--card);
+              color:var(--dim); border-radius:6px; padding:2px 8px; cursor:pointer; }
+button.copy:hover { color:var(--accent); border-color:var(--accent); }
+.warn { background:var(--warn-bg); color:var(--warn-ink); border-radius:8px;
+        padding:6px 12px; margin:8px 0; font-size:13px; }
+.card.result { border-color:var(--accent); color:var(--accent); font-weight:600; }
+.card.ineligible { border-color:#c0392b; }
+</style></head>
+<body>
+<h1>splitql · planned execution</h1>
+<details open><summary>input query</summary><pre>
+SELECT region, count(*) AS orders, sum(amount) AS revenue, avg(amount) AS avg_ticket
+FROM sales
+WHERE amount &gt; 20
+GROUP BY region
+ORDER BY revenue DESC
+</pre></details><div class=statsrow><span class=stat><b>3</b> fragments</span><span class=stat><b>6</b> files</span><span class=stat><b>?</b> scanned</span><span class=stat>partials table <b><code>partials</code></b></span></div>
+<div class=flow>
+  <div class=stage><h3>scan + partial</h3><div class="card fragment" data-node="f0">
+  <div class=cardhead><span class=badge>fragment 0</span>
+    <span class=dim>2 files · size unknown · ? of scan</span></div>
+  <div class=bar><div class=fill style="width:0%"></div></div>
+  <details><summary>SQL</summary><pre>SELECT region AS g0, COUNT(*) AS a0, SUM(amount) AS a1, SUM(amount) AS a2_s, COUNT(amount) AS a2_c FROM READ_PARQUET([&#x27;_demo_data/sales-2026-01.parquet&#x27;, &#x27;_demo_data/sales-2026-04.parquet&#x27;]) AS sales WHERE amount &gt; 20 GROUP BY region</pre>
+    <button class=copy data-sql="SELECT region AS g0, COUNT(*) AS a0, SUM(amount) AS a1, SUM(amount) AS a2_s, COUNT(amount) AS a2_c FROM READ_PARQUET([&#x27;_demo_data/sales-2026-01.parquet&#x27;, &#x27;_demo_data/sales-2026-04.parquet&#x27;]) AS sales WHERE amount &gt; 20 GROUP BY region">copy</button></details>
+  <details><summary>files</summary><ul class=files><li><code>_demo_data/sales-2026-01.parquet</code> <span class=dim>size unknown</span></li><li><code>_demo_data/sales-2026-04.parquet</code> <span class=dim>size unknown</span></li></ul></details>
+</div><div class="card fragment" data-node="f1">
+  <div class=cardhead><span class=badge>fragment 1</span>
+    <span class=dim>2 files · size unknown · ? of scan</span></div>
+  <div class=bar><div class=fill style="width:0%"></div></div>
+  <details><summary>SQL</summary><pre>SELECT region AS g0, COUNT(*) AS a0, SUM(amount) AS a1, SUM(amount) AS a2_s, COUNT(amount) AS a2_c FROM READ_PARQUET([&#x27;_demo_data/sales-2026-02.parquet&#x27;, &#x27;_demo_data/sales-2026-05.parquet&#x27;]) AS sales WHERE amount &gt; 20 GROUP BY region</pre>
+    <button class=copy data-sql="SELECT region AS g0, COUNT(*) AS a0, SUM(amount) AS a1, SUM(amount) AS a2_s, COUNT(amount) AS a2_c FROM READ_PARQUET([&#x27;_demo_data/sales-2026-02.parquet&#x27;, &#x27;_demo_data/sales-2026-05.parquet&#x27;]) AS sales WHERE amount &gt; 20 GROUP BY region">copy</button></details>
+  <details><summary>files</summary><ul class=files><li><code>_demo_data/sales-2026-02.parquet</code> <span class=dim>size unknown</span></li><li><code>_demo_data/sales-2026-05.parquet</code> <span class=dim>size unknown</span></li></ul></details>
+</div><div class="card fragment" data-node="f2">
+  <div class=cardhead><span class=badge>fragment 2</span>
+    <span class=dim>2 files · size unknown · ? of scan</span></div>
+  <div class=bar><div class=fill style="width:0%"></div></div>
+  <details><summary>SQL</summary><pre>SELECT region AS g0, COUNT(*) AS a0, SUM(amount) AS a1, SUM(amount) AS a2_s, COUNT(amount) AS a2_c FROM READ_PARQUET([&#x27;_demo_data/sales-2026-03.parquet&#x27;, &#x27;_demo_data/sales-2026-06.parquet&#x27;]) AS sales WHERE amount &gt; 20 GROUP BY region</pre>
+    <button class=copy data-sql="SELECT region AS g0, COUNT(*) AS a0, SUM(amount) AS a1, SUM(amount) AS a2_s, COUNT(amount) AS a2_c FROM READ_PARQUET([&#x27;_demo_data/sales-2026-03.parquet&#x27;, &#x27;_demo_data/sales-2026-06.parquet&#x27;]) AS sales WHERE amount &gt; 20 GROUP BY region">copy</button></details>
+  <details><summary>files</summary><ul class=files><li><code>_demo_data/sales-2026-03.parquet</code> <span class=dim>size unknown</span></li><li><code>_demo_data/sales-2026-06.parquet</code> <span class=dim>size unknown</span></li></ul></details>
+</div></div>
+  <div class=arrow>→</div>
+  <div class=stage><h3>gather</h3>
+    <div class="card partials"><span class=badge>partials</span>
+      <p class=dim>concatenation of 3 fragment results<br>(any transport: Arrow, files, UNION ALL)</p></div></div>
+  <div class=arrow>→</div>
+  <div class=stage><h3>reduce</h3>
+    <div class="card reduce"><span class=badge>reduce</span>
+      <details open><summary>SQL</summary><pre>SELECT g0 AS &quot;region&quot;, SUM(a0) AS &quot;orders&quot;, SUM(a1) AS &quot;revenue&quot;, SUM(a2_s) / SUM(a2_c) AS &quot;avg_ticket&quot; FROM partials GROUP BY g0 ORDER BY revenue DESC</pre>
+      <button class=copy data-sql="SELECT g0 AS &quot;region&quot;, SUM(a0) AS &quot;orders&quot;, SUM(a1) AS &quot;revenue&quot;, SUM(a2_s) / SUM(a2_c) AS &quot;avg_ticket&quot; FROM partials GROUP BY g0 ORDER BY revenue DESC">copy</button></details></div></div>
+  <div class=arrow>→</div>
+  <div class=stage><h3>result</h3><div class="card result">✓ identical to single-node</div></div>
+</div>
+<script>
+document.querySelectorAll("button.copy").forEach(b => b.addEventListener("click", () => {
+  navigator.clipboard.writeText(b.dataset.sql).then(() => {
+    b.textContent = "copied"; setTimeout(() => b.textContent = "copy", 1200);
+  });
+}));
+</script>
+</body></html>
