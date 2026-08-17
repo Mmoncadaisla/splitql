@@ -52,6 +52,16 @@ def plan(
     # API misuse must surface even when the query itself is ineligible
     if sum(x is not None for x in (source, files, file_groups)) != 1:
         raise ValueError("pass exactly one of source=, files=, or file_groups=")
+    if file_groups is not None and any(not g for g in file_groups):
+        raise ValueError("file_groups must not contain empty groups")
+    for name, value in (
+        ("worker_memory_bytes", worker_memory_bytes),
+        ("target_fragment_bytes", target_fragment_bytes),
+        ("max_workers", max_workers),
+        ("workers", workers),
+    ):
+        if value is not None and value <= 0:
+            raise ValueError(f"{name} must be positive")
 
     try:
         statement = sqlglot.parse_one(sql, read=dialect)
@@ -90,10 +100,17 @@ def plan(
     table = statement.args["from_"].this
     alias = table.alias or table.name
 
+    # DuckLake tables can hold files written under different schema versions;
+    # union_by_name lets fragments scan added-column evolution (renames and
+    # drops need the catalog's column mapping and stay a documented caveat)
+    union_by_name = isinstance(source, DuckLakeSource)
+
     fragments = []
     for group in groups:
         fragment = result.fragment.copy()
-        fragment.args["from_"].this.replace(_scan_node(group, alias, dialect))
+        fragment.args["from_"].this.replace(
+            _scan_node(group, alias, dialect, union_by_name)
+        )
         fragments.append(fragment.sql(dialect=dialect))
 
     reduce_ = result.reduce.copy()
@@ -124,10 +141,7 @@ def _resolve_groups(
     if file_groups is not None:
         # Verbatim contract: the caller owns grouping AND pruning here —
         # one fragment per given group, no reordering, no stats pruning.
-        # An empty group cannot become a fragment, so it is API misuse,
-        # not something to drop silently.
-        if any(not g for g in file_groups):
-            raise ValueError("file_groups must not contain empty groups")
+        # (Empty groups already rejected up front in plan().)
         groups = [
             [f if isinstance(f, DataFile) else DataFile(path=str(f)) for f in g]
             for g in file_groups
@@ -173,12 +187,15 @@ def _never_empty(
     return [[keep]], [f for f in pruned if f is not keep]
 
 
-def _scan_node(group: list[DataFile], alias: str, dialect: str) -> exp.Expression:
+def _scan_node(
+    group: list[DataFile], alias: str, dialect: str, union_by_name: bool = False
+) -> exp.Expression:
     """Build ``read_parquet(['f1', ...]) AS alias`` by parsing a snippet, so
     no assumptions are made about sqlglot's node classes for table functions."""
     paths = ", ".join(
         exp.Literal.string(f.path).sql(dialect=dialect) for f in group
     )
+    options = ", union_by_name = TRUE" if union_by_name else ""
     alias_sql = exp.to_identifier(alias).sql(dialect=dialect)
-    snippet = f"SELECT * FROM read_parquet([{paths}]) AS {alias_sql}"
+    snippet = f"SELECT * FROM read_parquet([{paths}]{options}) AS {alias_sql}"
     return sqlglot.parse_one(snippet, read=dialect).args["from_"].this

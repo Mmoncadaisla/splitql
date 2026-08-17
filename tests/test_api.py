@@ -40,6 +40,43 @@ def test_empty_source_is_ineligible():
 def test_empty_group_is_api_misuse():
     with pytest.raises(ValueError):
         plan(SQL, file_groups=[["a.parquet"], []])
+    # ...even when the query itself is unparseable or ineligible
+    with pytest.raises(ValueError):
+        plan("not sql (", file_groups=[["a.parquet"], []])
+
+
+def test_nonpositive_sizing_params_raise():
+    for kwargs in [
+        {"target_fragment_bytes": 0},
+        {"target_fragment_bytes": -1},
+        {"worker_memory_bytes": 0},
+        {"max_workers": 0},
+        {"workers": 0},
+    ]:
+        with pytest.raises(ValueError):
+            plan(SQL, files=["a.parquet"], **kwargs)
+
+
+def test_ducklake_scans_union_by_name(tmp_path):
+    import duckdb
+
+    old = str(tmp_path / "old.parquet")
+    new = str(tmp_path / "new.parquet")
+    con = duckdb.connect()
+    con.execute(f"COPY (SELECT 1 AS id, 10.0 AS x) TO '{old}' (FORMAT parquet)")
+    con.execute(
+        f"COPY (SELECT 2 AS id, 20.0 AS x, 'n' AS extra) TO '{new}' (FORMAT parquet)"
+    )
+    rows = [
+        {"data_file": old, "data_file_size_bytes": 100, "delete_file": None},
+        {"data_file": new, "data_file_size_bytes": 100, "delete_file": None},
+    ]
+    src = DuckLakeSource.from_list_files(rows, has_inlined_data=False)
+    p = plan("SELECT count(*) AS n, sum(x) AS s FROM t", source=src, workers=1)
+    assert "union_by_name" in p.fragments[0].lower()
+    # the mixed-schema scan must actually execute
+    result = duckdb.connect().execute(p.fragments[0]).fetchall()
+    assert result[0][0] == 2
 
 
 def test_path_escaping():
