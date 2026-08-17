@@ -90,6 +90,14 @@ def _literal_value(node: exp.Expression):
 
 def _cmp(a, b):
     """-1/0/1, or None when the pair is not comparable."""
+    # Mirror engine coercion for mixed float/Decimal: a DOUBLE column (float
+    # stats) compares against a decimal literal as DOUBLE, so exact-Decimal
+    # comparison would call 0.1 stats a mismatch for WHERE x = 0.1 and prune
+    # the matching file. Decimal-vs-Decimal stays exact (DECIMAL columns).
+    if isinstance(a, float) and isinstance(b, Decimal):
+        b = float(b)
+    elif isinstance(b, float) and isinstance(a, Decimal):
+        a = float(a)
     if isinstance(a, date) and not isinstance(a, datetime) and isinstance(b, str):
         try:
             b = date.fromisoformat(b)

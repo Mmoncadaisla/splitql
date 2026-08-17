@@ -90,6 +90,15 @@ def test_decimal_stats_prune_exactly():
     assert kept == {"match.parquet"} and pruned == {"other.parquet"}
 
 
+def test_float_stats_compare_like_the_engine():
+    # DOUBLE columns yield float stats; the decimal literal must coerce to
+    # float (as DuckDB coerces to DOUBLE) or the matching file gets pruned
+    match = f("match.parquet", 0.1, 0.1)
+    other = f("other.parquet", 0.2, 0.3)
+    kept, pruned = kept_paths("SELECT count(*) FROM t WHERE x = 0.1", [match, other])
+    assert kept == {"match.parquet"} and pruned == {"other.parquet"}
+
+
 def test_is_null_pruning():
     no_nulls = f("nonulls.parquet", 0, 10, null_count=0)
     with_nulls = f("nulls.parquet", 0, 10, null_count=3)
