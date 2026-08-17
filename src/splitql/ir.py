@@ -29,6 +29,7 @@ class Plan:
     warnings: list[str] = field(default_factory=list)
     query: str | None = None
     fragment_files: list[list["DataFile"]] = field(default_factory=list)
+    pruned_files: list[str] = field(default_factory=list)
 
     @property
     def workers(self) -> int:
@@ -47,6 +48,7 @@ class Plan:
                 [{"path": f.path, "size_bytes": f.size_bytes} for f in group]
                 for group in self.fragment_files
             ],
+            "pruned_files": self.pruned_files,
         }
 
     def to_json(self) -> str:
@@ -63,5 +65,7 @@ class Plan:
         return to_html(self)
 
 
-def ineligible(reason: str) -> Plan:
-    return Plan(eligible=False, reason=reason)
+def ineligible(reason: str, query: str | None = None) -> Plan:
+    """Ineligible plans keep the original query so the JSON envelope alone
+    is enough for a non-Python caller to run the single-node fallback."""
+    return Plan(eligible=False, reason=reason, query=query)

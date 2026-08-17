@@ -13,9 +13,21 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class ColumnStats:
+    """Per-file min/max for one column (zone map). Values must be Python
+    comparables matching the column type (numbers, strings, date/datetime)."""
+
+    min_value: object = None
+    max_value: object = None
+    null_count: int | None = None
+
+
+@dataclass(frozen=True)
 class DataFile:
     path: str
     size_bytes: int | None = None
+    stats: dict[str, ColumnStats] | None = None
+    row_count: int | None = None
 
 
 class ParquetSource:
@@ -47,10 +59,11 @@ class DuckLakeSource:
     a raw ``read_parquet`` scan would resurrect deleted rows. Data
     inlining (small writes stored as catalog rows, on by default in
     DuckLake) is invisible to the file list: rows still inlined would be
-    silently missed. Pass ``has_inlined_data=False`` once you have checked
-    (e.g. ``DATA_INLINING_ROW_LIMIT 0`` on the writer, or after
-    ``ducklake_flush_inlined_data``); ``True`` refuses the split; ``None``
-    (unknown) allows it with a warning.
+    silently missed, so the gate is fail-closed — splitting requires an
+    explicit ``has_inlined_data=False`` assertion (check via
+    ``DATA_INLINING_ROW_LIMIT 0`` on the writer, or after
+    ``ducklake_flush_inlined_data``). ``True`` and ``None`` (unknown)
+    both refuse the split.
     """
 
     def __init__(
@@ -59,16 +72,22 @@ class DuckLakeSource:
         *,
         has_delete_files: bool = False,
         has_inlined_data: bool | None = None,
+        has_schema_evolution: bool | None = None,
     ):
         self.files = [
             f if isinstance(f, DataFile) else DataFile(path=str(f)) for f in files
         ]
         self.has_delete_files = has_delete_files
         self.has_inlined_data = has_inlined_data
+        self.has_schema_evolution = has_schema_evolution
 
     @classmethod
     def from_list_files(
-        cls, rows: Sequence, *, has_inlined_data: bool | None = None
+        cls,
+        rows: Sequence,
+        *,
+        has_inlined_data: bool | None = None,
+        has_schema_evolution: bool | None = None,
     ) -> "DuckLakeSource":
         """Build from ``ducklake_list_files`` rows: mappings (column name ->
         value) or positional sequences (data_file, data_file_size_bytes,
@@ -88,7 +107,10 @@ class DuckLakeSource:
             if delete is not None:
                 has_deletes = True
         return cls(
-            files, has_delete_files=has_deletes, has_inlined_data=has_inlined_data
+            files,
+            has_delete_files=has_deletes,
+            has_inlined_data=has_inlined_data,
+            has_schema_evolution=has_schema_evolution,
         )
 
     def blocking_reason(self) -> str | None:
@@ -104,12 +126,28 @@ class DuckLakeSource:
                 "table has inlined data in the catalog; a raw parquet scan "
                 "would miss those rows"
             )
+        if self.has_inlined_data is None:
+            return (
+                "inlined data status unknown; rows still inlined in the "
+                "DuckLake catalog would be silently missed — pass "
+                "has_inlined_data=False after checking (DATA_INLINING_ROW_LIMIT 0 "
+                "or ducklake_flush_inlined_data)"
+            )
+        if self.has_schema_evolution:
+            return (
+                "table has schema evolution across file generations; raw "
+                "parquet fragments cannot apply the catalog column mapping"
+            )
         return None
 
     def warnings(self) -> list[str]:
-        if self.has_inlined_data is None:
+        # Unknown evolution is a warning, not a block: unlike inlined data
+        # (silent row loss), a schema mismatch fails LOUDLY at fragment
+        # execution or concatenation time.
+        if self.has_schema_evolution is None:
             return [
-                "inlined data not checked: rows still inlined in the DuckLake "
-                "catalog would be missed by the fragments"
+                "schema evolution not checked: fragments scanning files from "
+                "older schema generations can fail at runtime — pass "
+                "has_schema_evolution=False after checking, or True to refuse"
             ]
         return []

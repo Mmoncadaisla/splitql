@@ -36,22 +36,38 @@ class SplitResult:
 def split(select: exp.Select, dialect: str) -> SplitResult:
     select = select.copy()
     _resolve_group_aliases(select)
-    if select.find(exp.AggFunc) is None:
+    # GROUP BY without aggregates still needs GLOBAL deduplication of groups,
+    # so it takes the aggregation path (concatenating per-fragment groups
+    # would emit duplicates).
+    if select.find(exp.AggFunc) is None and not select.args.get("group"):
         return _split_scan(select)
     return _split_aggregation(select, dialect)
 
 
 def _resolve_group_aliases(select: exp.Select) -> None:
-    """GROUP BY m, where m aliases a SELECT expression -> group by the expression."""
+    """GROUP BY m, where m aliases a SELECT expression -> group by the
+    expression. Unquoted identifiers match case-insensitively, per DuckDB
+    (GROUP BY bucket resolves an alias written AS Bucket)."""
     group = select.args.get("group")
     if group is None:
         return
-    alias_map = {
-        e.alias: e.this for e in select.expressions if isinstance(e, exp.Alias)
-    }
+    exact: dict[str, exp.Expression] = {}
+    folded: dict[str, exp.Expression] = {}
+    for e in select.expressions:
+        if not isinstance(e, exp.Alias):
+            continue
+        ident = e.args.get("alias")
+        exact[e.alias] = e.this
+        if isinstance(ident, exp.Identifier) and not ident.quoted:
+            folded[e.alias.lower()] = e.this
     for g in list(group.expressions):
-        if isinstance(g, exp.Column) and not g.table and g.name in alias_map:
-            g.replace(alias_map[g.name].copy())
+        if not (isinstance(g, exp.Column) and not g.table):
+            continue
+        target = exact.get(g.name)
+        if target is None and isinstance(g.this, exp.Identifier) and not g.this.quoted:
+            target = folded.get(g.name.lower())
+        if target is not None:
+            g.replace(target.copy())
 
 
 def _split_scan(select: exp.Select) -> SplitResult:
@@ -135,6 +151,7 @@ def _split_aggregation(select: exp.Select, dialect: str) -> SplitResult:
     fragment = select.copy()
     fragment.set("order", None)
     fragment.set("limit", None)
+    fragment.set("distinct", None)
     frag_selects = [
         exp.alias_(g.copy(), group_alias[g.sql(dialect=dialect)]) for g in group_exprs
     ] + aggs.partial_cols
@@ -187,6 +204,8 @@ def _split_aggregation(select: exp.Select, dialect: str) -> SplitResult:
     reduce_ = (
         exp.Select().select(*reduce_outputs).from_(exp.to_table(PARTIALS_PLACEHOLDER))
     )
+    if select.args.get("distinct"):
+        reduce_.set("distinct", exp.Distinct())
     if group_exprs:
         reduce_.set(
             "group",

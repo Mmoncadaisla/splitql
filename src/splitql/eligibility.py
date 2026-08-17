@@ -12,6 +12,29 @@ from sqlglot import exp
 
 SUPPORTED_AGGS = (exp.Sum, exp.Count, exp.Min, exp.Max, exp.Avg)
 
+# Nondeterministic (or evaluation-time-dependent) functions: each fragment
+# would observe its own value, diverging from any single evaluation.
+VOLATILE_NODES = (
+    exp.Rand,
+    exp.Uuid,
+    exp.CurrentTimestamp,
+    exp.CurrentDate,
+    exp.CurrentTime,
+    exp.Localtime,
+    exp.Localtimestamp,
+)
+VOLATILE_NAMES = {
+    "now",
+    "get_current_timestamp",
+    "get_current_time",
+    "random",
+    "uuid",
+    "today",
+    "current_localtime",
+    "current_localtimestamp",
+    "transaction_timestamp",
+}
+
 
 def ineligibility_reason(select: exp.Expression) -> str | None:
     """Return why this statement cannot be split, or None if it can."""
@@ -28,12 +51,29 @@ def ineligibility_reason(select: exp.Expression) -> str | None:
     if select.args.get("offset"):
         return "OFFSET is not supported"
 
+    distinct = select.args.get("distinct")
+    if distinct is not None and distinct.args.get("on"):
+        return "DISTINCT ON is not supported"
+
+    limit = select.args.get("limit")
+    if limit is not None:
+        opts = limit.args.get("limit_options")
+        if opts is not None and (opts.args.get("percent") or opts.args.get("with_ties")):
+            return "percentage and WITH TIES limits are not supported"
+
     from_ = select.args.get("from_")
     if from_ is None:
         return "query has no FROM clause"
     source = from_.this
     if not isinstance(source, exp.Table) or not isinstance(source.this, exp.Identifier):
         return "FROM must be a single plain table"
+    table_alias = source.args.get("alias")
+    if table_alias is not None and table_alias.columns:
+        return "table aliases with column lists are not supported"
+    if select.find(exp.TableSample):
+        return "USING SAMPLE is not supported"
+    if select.find(exp.Collate):
+        return "COLLATE is not supported"
 
     for node in select.walk():
         if node is select:
@@ -45,6 +85,13 @@ def ineligibility_reason(select: exp.Expression) -> str | None:
 
     if select.find(exp.Filter):
         return "FILTER clauses on aggregates are not supported"
+
+    for node in select.find_all(exp.Func):
+        if isinstance(node, VOLATILE_NODES) or (
+            isinstance(node, exp.Anonymous) and node.name.lower() in VOLATILE_NAMES
+        ):
+            name = node.name if isinstance(node, exp.Anonymous) else node.sql_name()
+            return f"volatile function {name} is not supported"
 
     aggs = list(select.find_all(exp.AggFunc))
     for agg in aggs:

@@ -8,7 +8,6 @@ expandable SQL — flowing scan -> partials -> reduce -> result.
 from __future__ import annotations
 
 import html
-import json
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -81,7 +80,7 @@ def to_html(plan: Plan) -> str:
     <span class=dim>{len(group)} files · {_human_bytes(sizes[i]) if sizes[i] else 'size unknown'} · {share} of scan</span></div>
   <div class=bar><div class=fill style="width:{bar_w}"></div></div>
   <details><summary>SQL</summary><pre>{html.escape(sql)}</pre>
-    <button class=copy data-sql={json.dumps(sql)}>copy</button></details>
+    <button class=copy data-sql="{html.escape(sql, quote=True)}">copy</button></details>
   <details><summary>files</summary><ul class=files>{file_list or '<li class=dim>none</li>'}</ul></details>
 </div>"""
         )
@@ -98,7 +97,12 @@ def to_html(plan: Plan) -> str:
         f"{query_block}{warnings}"
         f'<div class=statsrow><span class=stat><b>{plan.workers}</b> fragments</span>'
         f"<span class=stat><b>{total_files}</b> files</span>"
-        f"<span class=stat><b>{_human_bytes(total_bytes) if total_bytes else '?'}</b> scanned</span>"
+        + (
+            f"<span class=stat><b>{len(plan.pruned_files)}</b> files pruned by stats</span>"
+            if plan.pruned_files
+            else ""
+        )
+        + f"<span class=stat><b>{_human_bytes(total_bytes) if total_bytes else '?'}</b> scanned</span>"
         f"<span class=stat>partials table <b><code>{html.escape(plan.partials_table)}</code></b></span></div>"
     )
     graph = f"""<div class=flow>
@@ -111,7 +115,7 @@ def to_html(plan: Plan) -> str:
   <div class=stage><h3>reduce</h3>
     <div class="card reduce"><span class=badge>reduce</span>
       <details open><summary>SQL</summary><pre>{html.escape(plan.reduce or '')}</pre>
-      <button class=copy data-sql={json.dumps(plan.reduce or '')}>copy</button></details></div></div>
+      <button class=copy data-sql="{html.escape(plan.reduce or '', quote=True)}">copy</button></details></div></div>
   <div class=arrow>→</div>
   <div class=stage><h3>result</h3><div class="card result">✓ identical to single-node</div></div>
 </div>"""
