@@ -5,7 +5,7 @@ FILES = [DataFile("a.parquet", 100), DataFile("b.parquet", 300)]
 
 
 def test_html_graph():
-    p = plan(SQL, files=FILES, workers=2)
+    p = plan(SQL, files=FILES, fragments=2)
     h = p.to_html()
     assert "<!doctype html>" in h
     assert "fragment 0" in h and "fragment 1" in h
@@ -15,7 +15,7 @@ def test_html_graph():
 
 
 def test_html_escapes_sql():
-    p = plan("SELECT count(*) FROM sales WHERE region < 'x'", files=FILES, workers=1)
+    p = plan("SELECT count(*) FROM sales WHERE region < 'x'", files=FILES, fragments=1)
     assert "&lt;" in p.to_html()
 
 
@@ -24,7 +24,7 @@ def test_copy_attribute_survives_double_quotes():
     # would truncate the attribute and break the copy button
     import re
 
-    p = plan(SQL, files=FILES, workers=1)
+    p = plan(SQL, files=FILES, fragments=1)
     h = p.to_html()
     assert '"region"' in (p.reduce or "")
     attrs = re.findall(r'data-sql="([^"]*)"', h)
@@ -37,7 +37,7 @@ def test_html_ineligible():
 
 
 def test_dot_graph():
-    p = plan(SQL, files=FILES, workers=2)
+    p = plan(SQL, files=FILES, fragments=2)
     d = p.to_dot()
     assert d.startswith("digraph")
     assert "f0 -> partials" in d and "f1 -> partials" in d

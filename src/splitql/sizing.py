@@ -17,24 +17,24 @@ DEFAULT_TARGET_FRAGMENT_BYTES = 512 * 1024 * 1024
 MEMORY_TO_TARGET_DIVISOR = 4
 
 
-def recommend_workers(
+def recommend_fragments(
     files: list[DataFile],
     *,
     worker_memory_bytes: int | None = None,
     target_fragment_bytes: int | None = None,
-    max_workers: int | None = None,
+    max_fragments: int | None = None,
 ) -> int:
     """How many fragments this file set wants.
 
     ``ceil(total_bytes / target)``, clamped to [1, number of files] (file
-    granularity is the floor) and to ``max_workers``. The target is either
+    granularity is the floor) and to ``max_fragments``. The target is either
     explicit or derived from worker memory (memory / 4).
     Requires every file size to be known.
     """
     if any(f.size_bytes is None for f in files):
         raise ValueError(
-            "recommend_workers needs size_bytes on every file; "
-            "pass workers explicitly instead"
+            "recommend_fragments needs size_bytes on every file; "
+            "pass fragments explicitly instead"
         )
     total = sum(f.size_bytes for f in files)
     target = target_fragment_bytes
@@ -44,24 +44,24 @@ def recommend_workers(
         target = DEFAULT_TARGET_FRAGMENT_BYTES
     n = max(1, math.ceil(total / target))
     n = min(n, len(files))
-    if max_workers is not None:
-        n = min(n, max_workers)
+    if max_fragments is not None:
+        n = min(n, max_fragments)
     return n
 
 
-def group_files(files: list[DataFile], workers: int) -> list[list[DataFile]]:
-    """Split files into at most ``workers`` groups. With sizes known, use
+def group_files(files: list[DataFile], fragments: int) -> list[list[DataFile]]:
+    """Split files into at most ``fragments`` groups. With sizes known, use
     LPT greedy balancing (largest file to the currently lightest group);
     otherwise round-robin. Empty groups are dropped."""
-    workers = max(1, min(workers, len(files)))
-    groups: list[list[DataFile]] = [[] for _ in range(workers)]
+    fragments = max(1, min(fragments, len(files)))
+    groups: list[list[DataFile]] = [[] for _ in range(fragments)]
     if all(f.size_bytes is not None for f in files):
-        loads = [0] * workers
+        loads = [0] * fragments
         for f in sorted(files, key=lambda f: f.size_bytes, reverse=True):
             i = loads.index(min(loads))
             groups[i].append(f)
             loads[i] += f.size_bytes
     else:
         for i, f in enumerate(files):
-            groups[i % workers].append(f)
+            groups[i % fragments].append(f)
     return [g for g in groups if g]

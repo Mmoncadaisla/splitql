@@ -32,7 +32,7 @@ class Plan:
     pruned_files: list[str] = field(default_factory=list)
 
     @property
-    def workers(self) -> int:
+    def fragment_count(self) -> int:
         return len(self.fragments)
 
     def to_dict(self) -> dict:

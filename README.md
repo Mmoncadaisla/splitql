@@ -1,12 +1,13 @@
 # splitql
 
-**Split one SQL query into N per-partition fragments plus a reduce query. Pure planning, no runtime.**
+**A portable partition planner: SQL + file metadata in, executable SQL fragments + a reduce query out. Pure planning, no runtime.**
 
-Every distributed SQL engine contains this piece — the coordinator that turns
-one query plus partition metadata into per-worker queries and a merge step —
-but always welded to that engine's runtime. splitql extracts it as a pure
-function: you bring the execution (threads, Ray, Lambdas, Kubernetes jobs,
-ssh), it brings the planning.
+splitql is for the case where you have SQL, a pile of independently
+readable files, and any compute that can run DuckDB — threads, a VM, a
+group of VMs, Ray, Lambdas, Kubernetes jobs, ssh — but no distributed SQL
+engine and no wish to operate one. It compiles the provably-parallel
+subset of SQL into a **map → gather → reduce** shape, and refuses
+everything else loudly.
 
 ```
 input:   SQL + parquet files (or a DuckLake table)
@@ -17,6 +18,23 @@ Run each fragment anywhere, concatenate their results into a relation, run
 `reduce` over it. The final result is **identical to single-node execution**
 — that is the contract, and the whole test suite is a comparison against a
 single-node DuckDB oracle (including property-based random queries).
+
+## What this is — and what it is not
+
+- It **is** a compiler from SQL to embarrassingly-parallel relational
+  algebra: scans, filters, projections, DISTINCT and decomposable
+  aggregates become per-partition fragments plus an algebraic reduce.
+- It is **not** distributed SQL. There is no shuffle/exchange: joins,
+  cross-partition windows and friends are rejected by design. Run those on
+  one node, or on an engine that owns a shuffle — that is Trino/Spark
+  territory, deliberately not ours.
+- The execution shape is **map → gather → reduce**: every fragment's
+  partial result is gathered into ONE relation before the reduce. See the
+  gather-bottleneck caveat below before pointing this at high-cardinality
+  GROUP BYs.
+- Executors are dumb by contract: a worker is "anything that can run a SQL
+  string and hand back rows". No agent, no cluster membership, no
+  protocol. That is what makes the plan portable across backends.
 
 ## Install
 
@@ -34,7 +52,7 @@ p = plan(
     "WHERE d >= DATE '2026-01-01' GROUP BY region",
     files=["s3://lake/sales/a.parquet", "s3://lake/sales/b.parquet",
            "s3://lake/sales/c.parquet", "s3://lake/sales/d.parquet"],
-    workers=2,
+    fragments=2,
 )
 
 p.fragments
@@ -123,6 +141,14 @@ rows = con.execute("FROM ducklake_list_files('lake', 'sales')").fetchall()
 p = plan(sql, source=DuckLakeSource.from_list_files(rows, has_inlined_data=False))
 ```
 
+**Pin the snapshot.** Derive the file list from one snapshot so every
+fragment executes against the same logical version of the table, even
+while writers keep committing:
+
+```sql
+FROM ducklake_list_files('lake', 'sales', snapshot_version => 42)
+```
+
 The source enforces DuckLake's correctness caveats instead of hoping:
 
 - **delete files present** → not eligible (a raw parquet scan would
@@ -139,15 +165,17 @@ The source enforces DuckLake's correctness caveats instead of hoping:
   concatenation error), so `has_schema_evolution=None` (unknown) plans
   with a warning, `True` refuses, `False` means you checked.
 
-## Worker count
+## Fragment count
 
-Explicit `workers=N` always wins. With file sizes available (DuckLake always
-has them), splitql can recommend instead:
+splitql plans **fragments** (chunks of work), not workers — how many
+execute at once is the caller's business (sequentially, 10 threads, 100
+Lambdas: same plan). Explicit `fragments=N` always wins. With file sizes
+available (DuckLake always has them), splitql can recommend instead:
 
 ```python
 plan(sql, source=src)                                # ceil(total / 512MB), capped by #files
-plan(sql, source=src, worker_memory_bytes=8 * 2**30) # target = memory / 4
-plan(sql, source=src, max_workers=16)
+plan(sql, source=src, worker_memory_bytes=8 * 2**30) # target = executing machine's memory / 4
+plan(sql, source=src, max_fragments=16)
 ```
 
 Grouping balances by size (LPT greedy) when sizes are known, round-robin
@@ -231,6 +259,20 @@ execution and both present in single-node DuckDB itself:
 
 Queries with deterministic semantics and exact types produce identical
 results — that is the tested contract.
+
+## The gather bottleneck (know your GROUP BY cardinality)
+
+Partial results scale with the **number of groups**, not the input size.
+`GROUP BY region` gathers a handful of rows per fragment no matter how many
+terabytes were scanned; `GROUP BY user_id` over 500M users makes every
+partial huge, and the central gather becomes the problem that shuffles
+exist to solve — which splitql deliberately does not solve. Rule of thumb:
+split when the partials are small relative to the scan.
+
+Roadmap mitigation: **tree reduction**. Decomposable aggregates re-reduce —
+the reduce query is itself eligible SQL over the partials — so partials can
+be combined in fan-in stages instead of one central gather. That relieves
+coordinator bandwidth; it still is not a shuffle.
 
 ## Correctness story
 

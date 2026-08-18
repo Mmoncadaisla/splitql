@@ -74,19 +74,19 @@ ORDERED = [
 @pytest.mark.parametrize("sql", UNORDERED)
 @pytest.mark.parametrize("workers", [1, 2, 4])
 def test_matches_oracle_unordered(sql, workers, dataset):
-    _, got = run_split(sql, dataset, workers=workers)
+    _, got = run_split(sql, dataset, fragments=workers)
     assert_same(got, oracle(sql, dataset))
 
 
 @pytest.mark.parametrize("sql", ORDERED)
 @pytest.mark.parametrize("workers", [1, 3])
 def test_matches_oracle_ordered(sql, workers, dataset):
-    _, got = run_split(sql, dataset, workers=workers)
+    _, got = run_split(sql, dataset, fragments=workers)
     assert_same(got, oracle(sql, dataset), ordered=True)
 
 
 def test_fragments_are_runnable_independently(dataset):
     p, _ = run_split("SELECT region, sum(x) AS s FROM sales GROUP BY region", dataset)
-    assert p.workers == 2
+    assert p.fragment_count == 2
     assert all("read_parquet" in f.lower() for f in p.fragments)
     assert p.reduce is not None and "partials" in p.reduce
