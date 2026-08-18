@@ -4,6 +4,7 @@
   <img src="assets/logo.png" alt="splitql — files in, fragments out, one reduce" width="380">
 </p>
 
+
 **A portable partition planner: SQL + file metadata in, executable SQL
 fragments + a reduce query out. Pure planning, no runtime.**
 

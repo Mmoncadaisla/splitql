@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" alt="splitql — files in, fragments out, one reduce" width="380">
+  <img src="https://raw.githubusercontent.com/Mmoncadaisla/splitql/main/docs/assets/logo.png" alt="splitql — files in, fragments out, one reduce" width="380">
 </p>
 
 <p align="center">
@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
+  <a href="https://github.com/Mmoncadaisla/splitql/blob/main/LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white">
   <img alt="Dependencies: sqlglot only" src="https://img.shields.io/badge/deps-sqlglot%20only-6f42c1.svg">
   <img alt="Tested against a single-node DuckDB oracle" src="https://img.shields.io/badge/tested_against-DuckDB_oracle-2ea44f.svg">
@@ -92,13 +92,15 @@ p = plan(
 )
 
 p.fragments
-# ['SELECT region AS g0, SUM(amount) AS a0 FROM READ_PARQUET([...a..., ...b...]) AS sales WHERE ... GROUP BY region',
-#  'SELECT region AS g0, SUM(amount) AS a0 FROM READ_PARQUET([...c..., ...d...]) AS sales WHERE ... GROUP BY region']
+# round-robin without file sizes; size-balanced (LPT) when sizes are known
+# ['SELECT region AS g0, SUM(amount) AS a0 FROM READ_PARQUET([...a..., ...c...]) AS sales WHERE ... GROUP BY region',
+#  'SELECT region AS g0, SUM(amount) AS a0 FROM READ_PARQUET([...b..., ...d...]) AS sales WHERE ... GROUP BY region']
 p.reduce
 # 'SELECT g0 AS "region", SUM(a0) AS "total" FROM partials GROUP BY g0'
 ```
 
-Execution is yours. The minimal in-process runner:
+Execution is yours. The minimal in-process runner (`pip install duckdb pyarrow`
+— splitql itself never imports them):
 
 ```python
 import duckdb, pyarrow as pa
