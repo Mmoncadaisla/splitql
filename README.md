@@ -1,6 +1,30 @@
-# splitql
+<p align="center">
+  <img src="assets/logo.png" alt="splitql — files in, fragments out, one reduce" width="380">
+</p>
 
-**A portable partition planner: SQL + file metadata in, executable SQL fragments + a reduce query out. Pure planning, no runtime.**
+<p align="center">
+  <b>A portable partition planner: SQL + file metadata in, executable SQL fragments + a reduce query out.</b><br>
+  <b>Pure planning, no runtime.</b>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white">
+  <img alt="Dependencies: sqlglot only" src="https://img.shields.io/badge/deps-sqlglot%20only-6f42c1.svg">
+  <img alt="Tested against a single-node DuckDB oracle" src="https://img.shields.io/badge/tested_against-DuckDB_oracle-2ea44f.svg">
+</p>
+
+<p align="center">
+  <a href="https://mmoncadaisla.github.io/splitql/">Documentation</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#quickstart">Quickstart</a> ·
+  <a href="#what-is-and-isnt-eligible">Eligibility</a> ·
+  <a href="#partition-sources">Sources</a> ·
+  <a href="#zone-map-pruning">Pruning</a> ·
+  <a href="#roadmap">Roadmap</a>
+</p>
+
+---
 
 splitql is for the case where you have SQL, a pile of independently
 readable files, and any compute that can run DuckDB — threads, a VM, a
@@ -12,6 +36,18 @@ everything else loudly.
 ```
 input:   SQL + parquet files (or a DuckLake table)
 output:  { eligible, fragments: [sql, ...], reduce: sql }
+```
+
+```mermaid
+flowchart LR
+    subgraph you["your compute — any of it"]
+        F1["fragment 1<br/><i>SQL over files a, b</i>"]
+        F2["fragment 2<br/><i>SQL over files c, d</i>"]
+        FN["fragment N<br/><i>SQL over files …</i>"]
+    end
+    Q["SQL +<br/>file metadata"] -->|"plan()"| F1 & F2 & FN
+    F1 & F2 & FN --> G["gather<br/><i>concat partials</i>"]
+    G -->|"reduce SQL"| R["result ≡<br/>single-node"]
 ```
 
 Run each fragment anywhere, concatenate their results into a relation, run
@@ -291,6 +327,7 @@ from single-node DuckDB, that's a bug, full stop.
   community extension — the partition unit becomes a chunk-grid slice
   instead of a file list)
 - Dialect transpilation of fragments via sqlglot
+- Tree reduction for high-cardinality gathers
 
 ## License
 
