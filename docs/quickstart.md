@@ -20,15 +20,17 @@ p = plan(
 )
 
 p.fragments
-# ['SELECT region AS g0, SUM(amount) AS a0 FROM READ_PARQUET([...a..., ...b...]) AS sales WHERE ... GROUP BY region',
-#  'SELECT region AS g0, SUM(amount) AS a0 FROM READ_PARQUET([...c..., ...d...]) AS sales WHERE ... GROUP BY region']
+# round-robin without file sizes; size-balanced (LPT) when sizes are known
+# ['SELECT region AS g0, SUM(amount) AS a0 FROM READ_PARQUET([...a..., ...c...]) AS sales WHERE ... GROUP BY region',
+#  'SELECT region AS g0, SUM(amount) AS a0 FROM READ_PARQUET([...b..., ...d...]) AS sales WHERE ... GROUP BY region']
 p.reduce
 # 'SELECT g0 AS "region", SUM(a0) AS "total" FROM partials GROUP BY g0'
 ```
 
 ## Run the fragments
 
-Execution is yours. The minimal in-process runner:
+Execution is yours. The minimal in-process runner (`pip install duckdb pyarrow`
+— splitql itself never imports them):
 
 ```python
 import duckdb, pyarrow as pa
