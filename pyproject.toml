@@ -29,7 +29,7 @@ Issues = "https://github.com/Mmoncadaisla/splitql/issues"
 [project.optional-dependencies]
 dev = ["pytest>=8", "duckdb>=1.0", "pyarrow>=17"]
 examples = ["jupyterlab", "pandas", "duckdb>=1.0", "pyarrow>=17"]
-docs = ["zensical"]
+docs = ["zensical==0.0.55"]
 
 [build-system]
 requires = ["hatchling"]
