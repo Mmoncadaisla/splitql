@@ -8,6 +8,8 @@
 </p>
 
 <p align="center">
+  <a href="https://pypi.org/project/splitql/"><img alt="PyPI version" src="https://img.shields.io/pypi/v/splitql.svg?color=306998"></a>
+  <a href="https://pypistats.org/packages/splitql"><img alt="PyPI downloads per month" src="https://img.shields.io/pypi/dm/splitql.svg?color=306998"></a>
   <a href="https://github.com/Mmoncadaisla/splitql/blob/main/LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white">
   <img alt="Dependencies: sqlglot only" src="https://img.shields.io/badge/deps-sqlglot%20only-6f42c1.svg">
