@@ -12,7 +12,7 @@ from .eligibility import ineligibility_reason
 from .ir import Plan, ineligible
 from .pruning import prune_files
 from .rewrite import split
-from .sizing import group_files, recommend_workers
+from .sizing import group_files, recommend_fragments
 from .sources import DataFile, DuckLakeSource, ParquetSource
 
 Source = ParquetSource | DuckLakeSource
@@ -24,10 +24,10 @@ def plan(
     source: Source | None = None,
     files: Sequence[str | DataFile] | None = None,
     file_groups: Sequence[Sequence[str | DataFile]] | None = None,
-    workers: int | None = None,
+    fragments: int | None = None,
     worker_memory_bytes: int | None = None,
     target_fragment_bytes: int | None = None,
-    max_workers: int | None = None,
+    max_fragments: int | None = None,
     partials_table: str = "partials",
     dialect: str = "duckdb",
 ) -> Plan:
@@ -41,10 +41,10 @@ def plan(
     against the WHERE clause before grouping; files without stats are
     always scanned.
 
-    Worker count: explicit ``workers`` wins; otherwise it is recommended
+    Fragment count: explicit ``fragments`` wins; otherwise it is recommended
     from file sizes when the source knows them (optionally bounded by
-    ``worker_memory_bytes`` and ``max_workers``); otherwise one fragment
-    per file, capped by ``max_workers``.
+    ``worker_memory_bytes`` and ``max_fragments``); otherwise one fragment
+    per file, capped by ``max_fragments``.
 
     Returns an ineligible Plan (never raises) for anything about the QUERY
     that prevents splitting; raises ValueError only for API misuse.
@@ -57,8 +57,8 @@ def plan(
     for name, value in (
         ("worker_memory_bytes", worker_memory_bytes),
         ("target_fragment_bytes", target_fragment_bytes),
-        ("max_workers", max_workers),
-        ("workers", workers),
+        ("max_fragments", max_fragments),
+        ("fragments", fragments),
     ):
         if value is not None and value <= 0:
             raise ValueError(f"{name} must be positive")
@@ -80,10 +80,10 @@ def plan(
         source,
         files,
         file_groups,
-        workers,
+        fragments,
         worker_memory_bytes,
         target_fragment_bytes,
-        max_workers,
+        max_fragments,
         statement.args.get("where"),
     )
     if isinstance(resolved, Plan):
@@ -132,10 +132,10 @@ def _resolve_groups(
     source: Source | None,
     files: Sequence[str | DataFile] | None,
     file_groups: Sequence[Sequence[str | DataFile]] | None,
-    workers: int | None,
+    fragments: int | None,
     worker_memory_bytes: int | None,
     target_fragment_bytes: int | None,
-    max_workers: int | None,
+    max_fragments: int | None,
     where: exp.Where | None,
 ) -> tuple[list[list[DataFile]], list[str], list[DataFile]] | Plan:
     if file_groups is not None:
@@ -160,17 +160,17 @@ def _resolve_groups(
     groups_of_one, pruned = _never_empty(groups_of_one, pruned)
     kept = [f for g in groups_of_one for f in g]
 
-    if workers is None:
+    if fragments is None:
         if all(f.size_bytes is not None for f in kept):
-            workers = recommend_workers(
+            fragments = recommend_fragments(
                 kept,
                 worker_memory_bytes=worker_memory_bytes,
                 target_fragment_bytes=target_fragment_bytes,
-                max_workers=max_workers,
+                max_fragments=max_fragments,
             )
         else:
-            workers = len(kept) if max_workers is None else max_workers
-    return group_files(kept, workers), src.warnings(), pruned
+            fragments = len(kept) if max_fragments is None else max_fragments
+    return group_files(kept, fragments), src.warnings(), pruned
 
 
 def _never_empty(

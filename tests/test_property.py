@@ -46,5 +46,5 @@ def test_random_aggregation_matches_oracle(seed, dataset):
     rng = random.Random(seed)
     sql = gen_query(rng)
     workers = rng.choice([1, 2, 3, 4])
-    _, got = run_split(sql, dataset, workers=workers)
+    _, got = run_split(sql, dataset, fragments=workers)
     assert_same(got, oracle(sql, dataset)), sql

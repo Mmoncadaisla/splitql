@@ -20,7 +20,7 @@ NO_STATS = DataFile("nostats.parquet", size_bytes=10)
 
 
 def kept_paths(sql, files, **kw):
-    p = plan(sql, files=files, workers=len(files), **kw)
+    p = plan(sql, files=files, fragments=len(files), **kw)
     assert p.eligible, p.reason
     return {df.path for g in p.fragment_files for df in g}, set(p.pruned_files)
 
@@ -58,7 +58,7 @@ def test_file_groups_are_verbatim_never_pruned():
         "SELECT count(*) FROM t WHERE x > 999",
         file_groups=[[LOW], [HIGH]],
     )
-    assert p.eligible and p.workers == 2 and not p.pruned_files
+    assert p.eligible and p.fragment_count == 2 and not p.pruned_files
 
 
 def test_files_without_stats_are_always_kept():
@@ -140,12 +140,12 @@ def with_real_stats(files):
 
 def test_all_pruned_still_answers_global_aggregates(dataset):
     sql = "SELECT count(*) AS n, sum(x) AS s FROM sales WHERE x > 1e9"
-    p, got = run_split(sql, with_real_stats(dataset), workers=4)
-    assert p.workers == 1 and len(p.pruned_files) == 3
+    p, got = run_split(sql, with_real_stats(dataset), fragments=4)
+    assert p.fragment_count == 1 and len(p.pruned_files) == 3
     assert_same(got, oracle(sql, dataset))
 
 
 def test_pruning_preserves_oracle_results(dataset):
     sql = "SELECT region, count(*) AS n FROM sales WHERE x > 100 GROUP BY region"
-    p, got = run_split(sql, with_real_stats(dataset), workers=3)
+    p, got = run_split(sql, with_real_stats(dataset), fragments=3)
     assert_same(got, oracle(sql, dataset))

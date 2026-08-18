@@ -43,7 +43,7 @@ REJECTED = [
 
 @pytest.mark.parametrize("sql,reason_fragment", REJECTED)
 def test_rejected(sql, reason_fragment):
-    p = plan(sql, files=FILES, workers=2)
+    p = plan(sql, files=FILES, fragments=2)
     assert not p.eligible
     assert p.reduce is None and p.fragments == []
     assert reason_fragment.lower() in (p.reason or "").lower(), p.reason

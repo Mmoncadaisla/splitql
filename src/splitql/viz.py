@@ -34,11 +34,11 @@ def to_dot(plan: Plan) -> str:
         "digraph splitql {",
         "  rankdir=LR;",
         '  node [shape=box, fontname="Helvetica"];',
-        f'  partials [label="{plan.partials_table}\\n(concat of {plan.workers} partials)"];',
+        f'  partials [label="{plan.partials_table}\\n(concat of {plan.fragment_count} partials)"];',
         '  reduce [label="reduce"];',
         '  result [label="result", shape=oval];',
     ]
-    for i, files in enumerate(plan.fragment_files or [[]] * plan.workers):
+    for i, files in enumerate(plan.fragment_files or [[]] * plan.fragment_count):
         total = sum(f.size_bytes or 0 for f in files) if files else None
         label = f"fragment {i}\\n{len(files)} files"
         if total:
@@ -95,7 +95,7 @@ def to_html(plan: Plan) -> str:
     )
     stats = (
         f"{query_block}{warnings}"
-        f'<div class=statsrow><span class=stat><b>{plan.workers}</b> fragments</span>'
+        f'<div class=statsrow><span class=stat><b>{plan.fragment_count}</b> fragments</span>'
         f"<span class=stat><b>{total_files}</b> files</span>"
         + (
             f"<span class=stat><b>{len(plan.pruned_files)}</b> files pruned by stats</span>"
@@ -110,7 +110,7 @@ def to_html(plan: Plan) -> str:
   <div class=arrow>→</div>
   <div class=stage><h3>gather</h3>
     <div class="card partials"><span class=badge>{html.escape(plan.partials_table)}</span>
-      <p class=dim>concatenation of {plan.workers} fragment results<br>(any transport: Arrow, files, UNION ALL)</p></div></div>
+      <p class=dim>concatenation of {plan.fragment_count} fragment results<br>(any transport: Arrow, files, UNION ALL)</p></div></div>
   <div class=arrow>→</div>
   <div class=stage><h3>reduce</h3>
     <div class="card reduce"><span class=badge>reduce</span>

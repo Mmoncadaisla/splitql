@@ -31,7 +31,7 @@ def run_threaded(p, shuffle_seed: int):
     def one_fragment(sql: str):
         return duckdb.connect().execute(sql).to_arrow_table()
 
-    with ThreadPoolExecutor(max_workers=p.workers) as pool:
+    with ThreadPoolExecutor(max_workers=p.fragment_count) as pool:
         tables = list(pool.map(one_fragment, p.fragments))
     random.Random(shuffle_seed).shuffle(tables)
     con = duckdb.connect()
@@ -41,7 +41,7 @@ def run_threaded(p, shuffle_seed: int):
 
 @pytest.mark.parametrize("i,sql", list(enumerate(UNORDERED)))
 def test_threaded_execution_matches_single_node(i, sql, dataset):
-    p = plan(sql, files=dataset, workers=4)
+    p = plan(sql, files=dataset, fragments=4)
     assert p.eligible, p.reason
     for seed in (i, i + 100):  # two partial orders, same result
         assert_same(run_threaded(p, seed), oracle(sql, dataset))
@@ -49,7 +49,7 @@ def test_threaded_execution_matches_single_node(i, sql, dataset):
 
 @pytest.mark.parametrize("i,sql", list(enumerate(ORDERED)))
 def test_threaded_ordered_matches_single_node(i, sql, dataset):
-    p = plan(sql, files=dataset, workers=4)
+    p = plan(sql, files=dataset, fragments=4)
     assert p.eligible, p.reason
     for seed in (i, i + 100):
         assert_same(run_threaded(p, seed), oracle(sql, dataset), ordered=True)

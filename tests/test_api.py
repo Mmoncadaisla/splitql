@@ -8,7 +8,7 @@ from splitql import (
     ParquetSource,
     group_files,
     plan,
-    recommend_workers,
+    recommend_fragments,
 )
 
 SQL = "SELECT count(*) FROM sales"
@@ -16,7 +16,7 @@ SQL = "SELECT count(*) FROM sales"
 
 def test_file_groups_passthrough():
     p = plan(SQL, file_groups=[["a.parquet", "b.parquet"], ["c.parquet"]])
-    assert p.eligible and p.workers == 2
+    assert p.eligible and p.fragment_count == 2
     assert "a.parquet" in p.fragments[0] and "b.parquet" in p.fragments[0]
     assert "c.parquet" in p.fragments[1]
 
@@ -50,8 +50,8 @@ def test_nonpositive_sizing_params_raise():
         {"target_fragment_bytes": 0},
         {"target_fragment_bytes": -1},
         {"worker_memory_bytes": 0},
-        {"max_workers": 0},
-        {"workers": 0},
+        {"max_fragments": 0},
+        {"fragments": 0},
     ]:
         with pytest.raises(ValueError):
             plan(SQL, files=["a.parquet"], **kwargs)
@@ -95,7 +95,7 @@ def test_ducklake_scans_union_by_name(tmp_path):
         {"data_file": new, "data_file_size_bytes": 100, "delete_file": None},
     ]
     src = DuckLakeSource.from_list_files(rows, has_inlined_data=False)
-    p = plan("SELECT count(*) AS n, sum(x) AS s FROM t", source=src, workers=1)
+    p = plan("SELECT count(*) AS n, sum(x) AS s FROM t", source=src, fragments=1)
     assert "union_by_name" in p.fragments[0].lower()
     # the mixed-schema scan must actually execute
     result = duckdb.connect().execute(p.fragments[0]).fetchall()
@@ -103,27 +103,27 @@ def test_ducklake_scans_union_by_name(tmp_path):
 
 
 def test_path_escaping():
-    p = plan(SQL, files=["we'ird.parquet"], workers=1)
+    p = plan(SQL, files=["we'ird.parquet"], fragments=1)
     assert p.eligible
     assert "we''ird.parquet" in p.fragments[0]
 
 
 def test_partials_table_is_configurable():
-    p = plan(SQL, files=["a.parquet"], workers=1, partials_table="scratch.pieces")
+    p = plan(SQL, files=["a.parquet"], fragments=1, partials_table="scratch.pieces")
     assert "scratch.pieces" in p.reduce
 
 
 def test_unordered_limit_warns():
-    p = plan("SELECT id FROM sales LIMIT 5", files=["a.parquet"], workers=1)
+    p = plan("SELECT id FROM sales LIMIT 5", files=["a.parquet"], fragments=1)
     assert p.eligible and any("LIMIT without ORDER BY" in w for w in p.warnings)
     ordered = plan(
-        "SELECT id FROM sales ORDER BY id LIMIT 5", files=["a.parquet"], workers=1
+        "SELECT id FROM sales ORDER BY id LIMIT 5", files=["a.parquet"], fragments=1
     )
     assert ordered.eligible and not ordered.warnings
 
 
 def test_json_roundtrip():
-    p = plan(SQL, files=["a.parquet"], workers=1)
+    p = plan(SQL, files=["a.parquet"], fragments=1)
     data = json.loads(p.to_json())
     assert data["eligible"] is True
     assert len(data["fragments"]) == 1
@@ -163,13 +163,13 @@ def test_ducklake_positional_rows():
     assert not src.has_delete_files
 
 
-def test_recommend_workers():
+def test_recommend_fragments():
     files = [DataFile(f"f{i}.parquet", 512 * 1024 * 1024) for i in range(10)]
-    assert recommend_workers(files) == 10
-    assert recommend_workers(files, max_workers=4) == 4
-    assert recommend_workers(files, worker_memory_bytes=8 * 1024**3) == 3
+    assert recommend_fragments(files) == 10
+    assert recommend_fragments(files, max_fragments=4) == 4
+    assert recommend_fragments(files, worker_memory_bytes=8 * 1024**3) == 3
     with pytest.raises(ValueError):
-        recommend_workers([DataFile("f.parquet")])
+        recommend_fragments([DataFile("f.parquet")])
 
 
 def test_group_files_balances_by_size():
@@ -179,13 +179,13 @@ def test_group_files_balances_by_size():
     assert sums == [11, 11]
 
 
-def test_workers_recommended_when_sizes_known():
+def test_fragments_recommended_when_sizes_known():
     src = ParquetSource([DataFile(f"f{i}.parquet", 512 * 1024 * 1024) for i in range(6)])
-    p = plan(SQL, source=src, max_workers=3)
-    assert p.eligible and p.workers == 3
+    p = plan(SQL, source=src, max_fragments=3)
+    assert p.eligible and p.fragment_count == 3
 
 
 def test_target_fragment_bytes_drives_fanout():
     files = [DataFile(f"f{i}.parquet", 1024 * 1024) for i in range(6)]  # 6 MB total
-    assert plan(SQL, files=files).workers == 1  # default 512MB target: one is enough
-    assert plan(SQL, files=files, target_fragment_bytes=2 * 1024 * 1024).workers == 3
+    assert plan(SQL, files=files).fragment_count == 1  # default 512MB target: one is enough
+    assert plan(SQL, files=files, target_fragment_bytes=2 * 1024 * 1024).fragment_count == 3

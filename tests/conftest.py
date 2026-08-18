@@ -40,10 +40,10 @@ def oracle(sql: str, files: list[str]):
     return con.execute(sql).fetchall()
 
 
-def run_split(sql: str, files: list[str], workers: int = 2, **kwargs):
+def run_split(sql: str, files: list[str], fragments: int = 2, **kwargs):
     """Execute a plan the way any runtime would: fragments on isolated
     connections, partials concatenated, reduce over the combination."""
-    p = plan(sql, files=files, workers=workers, **kwargs)
+    p = plan(sql, files=files, fragments=fragments, **kwargs)
     assert p.eligible, f"unexpectedly ineligible: {p.reason}"
     partials = pa.concat_tables(
         [duckdb.connect().execute(frag).to_arrow_table() for frag in p.fragments]
